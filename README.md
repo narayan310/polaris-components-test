@@ -2,7 +2,8 @@
 
 Static specimen pages for Shopify **Polaris 2.0** web components (App Home / `s-*` elements), built to import into Figma for prototyping.
 
-- `index.html` — every component, with its variants, tones and states
+- `index.html` — foundations (fonts, type hierarchy, colors) followed by every component, with its variants, tones and states
+- `foundations.js` — measures the foundations from the rendered components, so they always match the loaded Polaris version
 - `patterns.html` — composed patterns: metrics card, setup guide, callout, empty state, index table, resource list, settings
 
 Components load from Shopify's CDN, so you need an internet connection. There is no build step.

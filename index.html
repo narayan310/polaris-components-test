@@ -13,11 +13,66 @@
   </script>
   <style>
     body { margin: 0; background: #f1f1f1; }
+
+    /* Foundations: plain light-DOM markup so Figma importers capture it cleanly */
+    .fd-note { font: 13px/1.4 system-ui, sans-serif; color: #616161; margin: 0 0 12px; }
+    .fd-row { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid #e3e3e3; }
+    .fd-row:last-child { border-bottom: 0; }
+    .fd-spec { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #303030; }
+    .fd-spec b { font-weight: 600; }
+    .fd-group { font: 600 13px/1.4 system-ui, sans-serif; color: #303030; margin: 20px 0 8px; }
+    .fd-group:first-child { margin-top: 0; }
+    .fd-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .fd-swatch { border: 1px solid #e3e3e3; border-radius: 8px; overflow: hidden; background: #fff; }
+    .fd-chip { height: 56px; }
+    .fd-meta { padding: 8px; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #303030; word-break: break-word; }
+    .fd-meta .fd-name { font: 600 12px/1.3 system-ui, sans-serif; margin-bottom: 2px; }
+    .fd-table { width: 100%; border-collapse: collapse; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .fd-table td { padding: 6px 8px; border-bottom: 1px solid #e3e3e3; vertical-align: middle; }
+    #fd-probes { position: absolute; left: -10000px; top: 0; width: 640px; }
+    @media (max-width: 640px) { .fd-row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 <s-page heading="Polaris components" inlineSize="large">
   <s-button slot="primary-action" variant="primary" href="patterns.html">View patterns</s-button>
+
+  <!-- ============ FOUNDATIONS ============ -->
+  <!-- Values are measured from the rendered components at runtime (foundations.js), so they
+       always reflect whichever Polaris version is loaded. -->
+  <s-section heading="Typography — fonts">
+    <p class="fd-note">Font faces registered on the page by Polaris, read from <code>document.fonts</code>.</p>
+    <div id="fd-fonts"><p class="fd-note">Measuring…</p></div>
+  </s-section>
+
+  <s-section heading="Typography — hierarchy">
+    <p class="fd-note">Each row is the real component. Specs on the right are measured from its rendered text.</p>
+    <div class="fd-row"><s-text data-type-probe="page-title" data-type-ref="page" data-type-mode="heading" color="subdued">Page title (top of page)</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text data-type-probe="section-heading" data-type-ref="section" data-type-mode="heading" color="subdued">Section heading (“Typography — hierarchy” above)</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-section heading="Sub-section heading" data-type-probe="subsection-heading" data-type-mode="heading"></s-section><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-heading data-type-probe="heading">Heading (inside a section)</s-heading><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-paragraph data-type-probe="paragraph">Paragraph — body copy</s-paragraph><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-paragraph color="subdued" data-type-probe="paragraph-subdued">Paragraph — subdued</s-paragraph><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text data-type-probe="text">Text — default</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text type="strong" data-type-probe="text-strong">Text — strong</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text color="subdued" data-type-probe="text-subdued">Text — subdued</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-link href="#" data-type-probe="link">Link</s-link><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-button variant="primary" data-type-probe="button" data-type-mode="button">Button label</s-button><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-badge data-type-probe="badge">Badge label</s-badge><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text-field label="Field label" name="fd-field" data-type-probe="field-label" data-type-mode="label"></s-text-field><div class="fd-spec"></div></div>
+    <div class="fd-group">Type tokens (CSS variables exposed by Polaris)</div>
+    <div id="fd-type-tokens"><p class="fd-note">Measuring…</p></div>
+  </s-section>
+
+  <s-section heading="Colors — as rendered">
+    <p class="fd-note">Sampled from real components. Contrast is against the card surface; WCAG AA needs 4.5:1 for body text.</p>
+    <div id="fd-colors"><p class="fd-note">Measuring…</p></div>
+  </s-section>
+
+  <s-section heading="Colors — tokens">
+    <p class="fd-note">Every color CSS variable Polaris defines, grouped by name.</p>
+    <div id="fd-color-tokens"><p class="fd-note">Measuring…</p></div>
+  </s-section>
 
   <!-- ============ ACTIONS ============ -->
   <s-section heading="Button — variants">
@@ -388,5 +443,7 @@
     </s-popover>
   </s-section>
 </s-page>
+<div id="fd-probes" aria-hidden="true"></div>
+<script src="foundations.js"></script>
 </body>
 </html>
