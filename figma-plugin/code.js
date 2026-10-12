@@ -12,7 +12,10 @@ figma.ui.onmessage = async function (msg) {
     figma.ui.postMessage({ type: 'done', report: report });
     figma.notify(isComponents ? 'Polaris components built' : 'Polaris foundations imported');
   } catch (e) {
-    figma.ui.postMessage({ type: 'error', message: 'Import failed: ' + (e && e.message ? e.message : String(e)) });
+    var detail = e && e.message ? e.message : String(e);
+    console.error(e);
+    figma.ui.postMessage({ type: 'error', message: 'Import failed: ' + detail });
+    figma.notify('Polaris import failed: ' + detail, { error: true });
   }
 };
 
@@ -508,6 +511,7 @@ async function buildComponents(data) {
   for (var s = 0; s < data.sets.length; s++) {
     var set = data.sets[s];
     if (!set.items.length) continue;
+    figma.ui.postMessage({ type: 'progress', text: 'Building ' + set.name + ' (' + (s + 1) + ' of ' + data.sets.length + ')…' });
     var comps = [];
     for (var i = 0; i < set.items.length; i++) {
       var item = set.items[i];

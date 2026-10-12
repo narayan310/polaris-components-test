@@ -20,47 +20,49 @@
 <button id="go">Import</button>
 <div id="status"></div>
 <script>
-  var go = document.getElementById('go');
-  document.getElementById('file').onchange = function (e) {
-    var f = e.target.files[0];
-    if (!f) return;
-    f.text().then(function (text) {
-      document.getElementById('json').value = text;
-      status.className = '';
-      status.textContent = 'Loaded ' + f.name + '. Press Import.';
-    });
-  };
-  var status = document.getElementById('status');
-  go.onclick = function () {
-    var data;
-    try {
-      data = JSON.parse(document.getElementById('json').value);
-    } catch (e) {
-      status.className = 'error';
-      status.textContent = 'That is not valid JSON: ' + e.message;
-      return;
+  // Wrapped in a function: a global named "status" would collide with window.status, which turns
+  // anything assigned to it into a string (that silently swallowed every message before).
+  (function () {
+    var go = document.getElementById('go');
+    var statusEl = document.getElementById('status');
+    function show(text, isError) {
+      statusEl.className = isError ? 'error' : '';
+      statusEl.textContent = text;
     }
-    go.disabled = true;
-    status.className = '';
-    status.textContent = 'Importing…';
-    parent.postMessage({ pluginMessage: {
-      type: 'import',
-      data: data,
-      options: {
-        tokens: document.getElementById('tokens').checked,
-        specimen: document.getElementById('specimen').checked,
-      },
-    } }, '*');
-  };
-  onmessage = function (e) {
-    var msg = e.data.pluginMessage;
-    go.disabled = false;
-    if (msg.type === 'error') {
-      status.className = 'error';
-      status.textContent = msg.message;
-    } else {
-      status.className = '';
-      status.textContent = msg.report.join('\n');
-    }
-  };
+    document.getElementById('file').onchange = function (e) {
+      var f = e.target.files[0];
+      if (!f) return;
+      f.text().then(function (text) {
+        document.getElementById('json').value = text;
+        show('Loaded ' + f.name + '. Press Import.');
+      });
+    };
+    go.onclick = function () {
+      var data;
+      try {
+        data = JSON.parse(document.getElementById('json').value);
+      } catch (e) {
+        show('That is not valid JSON: ' + e.message, true);
+        return;
+      }
+      go.disabled = true;
+      show(data.kind === 'polaris-components' ? 'Building components…' : 'Importing foundations…');
+      parent.postMessage({ pluginMessage: {
+        type: 'import',
+        data: data,
+        options: {
+          tokens: document.getElementById('tokens').checked,
+          specimen: document.getElementById('specimen').checked,
+        },
+      } }, '*');
+    };
+    window.onmessage = function (e) {
+      var msg = e.data && e.data.pluginMessage;
+      if (!msg) return;
+      if (msg.type === 'progress') { show(msg.text); return; }
+      go.disabled = false;
+      if (msg.type === 'error') show(msg.message, true);
+      else show(msg.report.join('\n'));
+    };
+  })();
 </script>
