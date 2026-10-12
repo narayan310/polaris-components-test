@@ -58,7 +58,9 @@ The plugin creates a new page with 24 component sets (169 variants):
 
 Re-running creates a fresh page, so the earlier result stays intact for comparison.
 
-Not covered: overlays (modal, popover, menu, tooltip), which only render while open, and anything Polaris draws with CSS pseudo-elements or background images.
+Also captured: absolutely positioned `::before`/`::after` layers (borders, bevels, overlays), gradient backgrounds (approximated as solid layers) and icons drawn as CSS masks. Polaris' `ShopifyInter` font falls back to Inter.
+
+Not covered: overlays (modal, popover, menu, tooltip), which only render while open; non-positioned pseudo-elements; raster background images.
 
 Alternative: capture `capture.html` with the **html.to.design** plugin, then name each frame with its caption, make it a component and **Combine as variants**.
 

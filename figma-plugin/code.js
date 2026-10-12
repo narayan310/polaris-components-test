@@ -111,7 +111,11 @@ function pickFont(stack, weight, available) {
     var mapped = SYSTEM_FONTS[name.toLowerCase()];
     candidates = candidates.concat(mapped || [name]);
   });
-  candidates.push('Inter');
+  // Polaris' own families (e.g. ShopifyInter) are Inter-based, so Inter is the best stand-in
+  // when the first family is missing; the rest of the CSS stack is system/script fallbacks.
+  var first = stack.split(',')[0].replace(/["']/g, '').trim().toLowerCase();
+  var firstCount = (SYSTEM_FONTS[first] || [first]).length;
+  candidates.splice(firstCount, 0, 'Inter');
   for (var i = 0; i < candidates.length; i++) {
     var fam = families[candidates[i].toLowerCase()];
     if (!fam) continue;
@@ -335,7 +339,8 @@ function size(n, w, h) { n.resize(Math.max(w, 0.01), Math.max(h, 0.01)); }
 
 function applyBox(frame, node, binder) {
   frame.name = node.name;
-  frame.fills = node.fill ? [paint(node.fill, binder)] : [];
+  var fills = node.fills || (node.fill ? [node.fill] : []);
+  frame.fills = fills.map(function (f) { return paint(f, binder); });
   if (node.stroke) {
     frame.strokes = [paint(node.stroke.color, binder)];
     frame.strokeAlign = 'INSIDE';
@@ -505,6 +510,7 @@ async function buildComponents(data) {
 
   var page = figma.createPage();
   page.name = data.version + ' components';
+  page.backgrounds = [{ type: 'SOLID', color: { r: 0.945, g: 0.945, b: 0.945 } }];
   await figma.setCurrentPageAsync(page);
 
   var y = 0, variants = 0, sets = 0, emptyVariants = 0;
@@ -537,6 +543,7 @@ async function buildComponents(data) {
     }
     var cs = figma.combineAsVariants(comps, page);
     cs.name = set.name;
+    cs.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
     var widest = comps.reduce(function (m, c) { return Math.max(m, c.width); }, 0);
     cs.layoutMode = 'HORIZONTAL';
     cs.layoutWrap = 'WRAP';
