@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polaris Patterns</title>
+  <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+  <style>
+    body { margin: 0; background: #f1f1f1; }
+  </style>
+</head>
+<body>
+<s-page heading="Polaris patterns" inlineSize="large">
+  <s-button slot="primary-action" href="index.html">View components</s-button>
+
+  <!-- Metrics card -->
+  <s-section heading="Metrics card">
+    <s-grid gridTemplateColumns="repeat(3, 1fr)" gap="base">
+      <s-box padding="base" background="base" border="base" borderRadius="base">
+        <s-stack gap="small-200">
+          <s-text color="subdued">Total sales</s-text>
+          <s-heading>$12,480</s-heading>
+          <s-badge tone="success" icon="arrow-up">12%</s-badge>
+        </s-stack>
+      </s-box>
+      <s-box padding="base" background="base" border="base" borderRadius="base">
+        <s-stack gap="small-200">
+          <s-text color="subdued">Orders</s-text>
+          <s-heading>318</s-heading>
+          <s-badge tone="critical" icon="arrow-down">4%</s-badge>
+        </s-stack>
+      </s-box>
+      <s-box padding="base" background="base" border="base" borderRadius="base">
+        <s-stack gap="small-200">
+          <s-text color="subdued">Conversion rate</s-text>
+          <s-heading>2.8%</s-heading>
+          <s-badge>No change</s-badge>
+        </s-stack>
+      </s-box>
+    </s-grid>
+  </s-section>
+
+  <!-- Setup guide -->
+  <s-section heading="Setup guide">
+    <s-stack gap="base">
+      <s-stack direction="inline" gap="base" alignItems="center" justifyContent="space-between">
+        <s-paragraph color="subdued">Complete these steps to start selling.</s-paragraph>
+        <s-badge>1 of 3 complete</s-badge>
+      </s-stack>
+      <s-divider></s-divider>
+      <s-stack gap="small">
+        <s-checkbox label="Connect your account" name="step1" checked></s-checkbox>
+        <s-checkbox label="Configure shipping rates" name="step2" details="Set rates for each shipping zone"></s-checkbox>
+        <s-checkbox label="Publish your first product" name="step3"></s-checkbox>
+      </s-stack>
+      <s-button-group>
+        <s-button slot="primary-action" variant="primary">Configure shipping</s-button>
+        <s-button slot="secondary-actions" variant="tertiary">Dismiss guide</s-button>
+      </s-button-group>
+    </s-stack>
+  </s-section>
+
+  <!-- Callout card -->
+  <s-section>
+    <s-grid gridTemplateColumns="1fr auto" gap="large" alignItems="center">
+      <s-stack gap="small">
+        <s-heading>Callout card</s-heading>
+        <s-paragraph>Promote a feature or next step with a short message and one clear action.</s-paragraph>
+        <s-stack direction="inline" gap="base">
+          <s-button variant="primary">Get started</s-button>
+          <s-button variant="tertiary">Learn more</s-button>
+        </s-stack>
+      </s-stack>
+      <s-thumbnail src="https://picsum.photos/id/180/200/200" alt="" size="large"></s-thumbnail>
+    </s-grid>
+  </s-section>
+
+  <!-- Empty state -->
+  <s-section heading="Empty state">
+    <s-box padding="large-200">
+      <s-stack gap="base" alignItems="center">
+        <s-icon type="product" size="base"></s-icon>
+        <s-heading>Add your first product</s-heading>
+        <s-paragraph color="subdued">Products you add will appear here. Start by importing or creating one.</s-paragraph>
+        <s-stack direction="inline" gap="base" justifyContent="center">
+          <s-button variant="primary" icon="plus">Add product</s-button>
+          <s-button>Import</s-button>
+        </s-stack>
+      </s-stack>
+    </s-box>
+  </s-section>
+
+  <!-- Index table with filters -->
+  <s-section heading="Index table" padding="none">
+    <s-table>
+      <s-grid slot="filters" gridTemplateColumns="1fr auto" gap="small-200" alignItems="center">
+        <s-search-field label="Search orders" labelAccessibilityVisibility="exclusive" placeholder="Search orders"></s-search-field>
+        <s-button icon="filter" accessibilityLabel="Filter"></s-button>
+      </s-grid>
+      <s-table-header-row>
+        <s-table-header listSlot="primary">Order</s-table-header>
+        <s-table-header listSlot="secondary">Customer</s-table-header>
+        <s-table-header listSlot="inline">Payment</s-table-header>
+        <s-table-header listSlot="inline">Fulfillment</s-table-header>
+        <s-table-header listSlot="labeled" format="currency">Total</s-table-header>
+      </s-table-header-row>
+      <s-table-body>
+        <s-table-row>
+          <s-table-cell><s-link href="#">#1024</s-link></s-table-cell>
+          <s-table-cell>Jane Doe</s-table-cell>
+          <s-table-cell><s-badge tone="success">Paid</s-badge></s-table-cell>
+          <s-table-cell><s-badge tone="warning">Unfulfilled</s-badge></s-table-cell>
+          <s-table-cell>$128.00</s-table-cell>
+        </s-table-row>
+        <s-table-row>
+          <s-table-cell><s-link href="#">#1023</s-link></s-table-cell>
+          <s-table-cell>Sam Lee</s-table-cell>
+          <s-table-cell><s-badge tone="caution">Pending</s-badge></s-table-cell>
+          <s-table-cell><s-badge tone="success">Fulfilled</s-badge></s-table-cell>
+          <s-table-cell>$54.50</s-table-cell>
+        </s-table-row>
+        <s-table-row>
+          <s-table-cell><s-link href="#">#1022</s-link></s-table-cell>
+          <s-table-cell>Alex Kim</s-table-cell>
+          <s-table-cell><s-badge tone="critical">Refunded</s-badge></s-table-cell>
+          <s-table-cell><s-badge>Restocked</s-badge></s-table-cell>
+          <s-table-cell>$0.00</s-table-cell>
+        </s-table-row>
+      </s-table-body>
+    </s-table>
+  </s-section>
+
+  <!-- Resource list -->
+  <s-section heading="Resource list" padding="none">
+    <s-clickable href="#" padding="base">
+      <s-grid gridTemplateColumns="auto 1fr auto" gap="base" alignItems="center">
+        <s-avatar initials="JD" alt="Jane Doe"></s-avatar>
+        <s-stack gap="none">
+          <s-text type="strong">Jane Doe</s-text>
+          <s-text color="subdued">Toronto, Canada · 12 orders</s-text>
+        </s-stack>
+        <s-badge tone="info">VIP</s-badge>
+      </s-grid>
+    </s-clickable>
+    <s-divider></s-divider>
+    <s-clickable href="#" padding="base">
+      <s-grid gridTemplateColumns="auto 1fr auto" gap="base" alignItems="center">
+        <s-avatar initials="SL" alt="Sam Lee"></s-avatar>
+        <s-stack gap="none">
+          <s-text type="strong">Sam Lee</s-text>
+          <s-text color="subdued">Berlin, Germany · 3 orders</s-text>
+        </s-stack>
+        <s-badge>New</s-badge>
+      </s-grid>
+    </s-clickable>
+  </s-section>
+
+  <!-- Settings template -->
+  <s-section heading="Settings — General">
+    <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+      <s-text-field label="Store name" name="store" value="Snow Supply Co."></s-text-field>
+      <s-email-field label="Contact email" name="contact" value="hello@snowsupply.example"></s-email-field>
+      <s-select label="Currency" name="currency">
+        <s-option value="usd">USD — US Dollar</s-option>
+        <s-option value="eur">EUR — Euro</s-option>
+      </s-select>
+      <s-select label="Weight unit" name="weight">
+        <s-option value="kg">Kilograms (kg)</s-option>
+        <s-option value="lb">Pounds (lb)</s-option>
+      </s-select>
+    </s-grid>
+  </s-section>
+
+  <s-section heading="Settings — Notifications">
+    <s-stack gap="base">
+      <s-switch label="Email me when an order is placed" name="n1" checked></s-switch>
+      <s-switch label="Email me about low inventory" name="n2" details="Sent when stock drops below 5"></s-switch>
+    </s-stack>
+  </s-section>
+
+  <!-- Footer help -->
+  <s-stack alignItems="center">
+    <s-text color="subdued">Learn more about <s-link href="#">managing settings</s-link>.</s-text>
+  </s-stack>
+</s-page>
+</body>
+</html>
