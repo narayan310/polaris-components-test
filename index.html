@@ -4,7 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Polaris Components</title>
-  <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+  <!-- Polaris 2.0 RC by default; add ?polaris=1 to the URL to compare with Polaris 1 -->
+  <script>
+    (function () {
+      var file = new URLSearchParams(location.search).get('polaris') === '1' ? 'polaris-1.js' : 'polaris-2.0-rc.js';
+      document.write('<script src="https://cdn.shopify.com/shopifycloud/' + file + '"><\/script>');
+    })();
+  </script>
   <style>
     body { margin: 0; background: #f1f1f1; }
   </style>

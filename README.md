@@ -1,11 +1,16 @@
 # polaris-components-test
 
-Static specimen pages for Shopify **Polaris web components** (App Home / `s-*` elements), built to import into Figma for prototyping.
+Static specimen pages for Shopify **Polaris 2.0** web components (App Home / `s-*` elements), built to import into Figma for prototyping.
 
 - `index.html` — every component, with its variants, tones and states
 - `patterns.html` — composed patterns: metrics card, setup guide, callout, empty state, index table, resource list, settings
 
-Components load from Shopify's CDN (`cdn.shopify.com/shopifycloud/polaris.js`), so you need an internet connection. There is no build step.
+Components load from Shopify's CDN, so you need an internet connection. There is no build step.
+
+- Default: `polaris-2.0-rc.js`. Outside the Shopify admin it renders in the **new admin design**.
+- Add `?polaris=1` to the URL (e.g. `index.html?polaris=1`) to load `polaris-1.js` and compare with the previous design.
+
+Polaris 2.0 is a release candidate, so its styling may still change before the stable release.
 
 ## View
 
