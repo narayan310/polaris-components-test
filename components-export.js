@@ -335,6 +335,16 @@
         if (child) node.children.push(child);
       });
     }
+    // A wrapper with no box of its own (inline wrappers around blocks, zero-size hosts) takes the
+    // bounds of its content, so child offsets stay local.
+    if ((node.w < 0.5 || node.h < 0.5) && node.children.length) {
+      var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      node.children.forEach(function (c) {
+        x1 = Math.min(x1, c.x); y1 = Math.min(y1, c.y);
+        x2 = Math.max(x2, c.x + c.w); y2 = Math.max(y2, c.y + c.h);
+      });
+      node.x = round(x1); node.y = round(y1); node.w = round(x2 - x1); node.h = round(y2 - y1);
+    }
     var after = pseudo(el, '::after', r, origin, skipped);
     if (after) node.children.push(after);
     if (skipped.length) node.skippedPseudo = skipped;
@@ -359,8 +369,10 @@
       type: 'frame', name: 'root', x: 0, y: 0, w: round(origin.width), h: round(origin.height),
       fills: [], stroke: null, radius: [0, 0, 0, 0], effects: [], opacity: 1, clip: false, position: 'flow', children: [],
     };
-    Array.prototype.forEach.call(frame.children, function (c) {
-      var n = serElement(c, origin);
+    // renderedChildren skips display:contents hosts (Polaris' s-* elements): they have no box, and
+    // measuring them gives 0x0 at the page origin, which threw their content far off-component.
+    renderedChildren(frame).forEach(function (c) {
+      var n = c.node.nodeType === 3 ? serText(c.node, c.styleEl, origin) : serElement(c.node, origin);
       if (n) root.children.push(n);
     });
     return root;
@@ -406,11 +418,16 @@
     setTimeout(function () {
       try {
         var data = exportAll();
-        var count = 0, empty = 0, layers = 0, filled = 0, texts = 0, icons = 0;
+        var count = 0, empty = 0, layers = 0, filled = 0, texts = 0, icons = 0, outside = 0;
+        function within(n, p) {
+          if (n.x < p.x - 1 || n.y < p.y - 1 || n.x + n.w > p.x + p.w + 1 || n.y + n.h > p.y + p.h + 1) outside++;
+          (n.children || []).forEach(function (c) { within(c, n); });
+        }
         data.sets.forEach(function (s) {
           s.items.forEach(function (i) {
             count++;
             if (!i.tree.children.length) empty++;
+            i.tree.children.forEach(function (c) { within(c, i.tree); });
             (function walk(n) {
               layers++;
               if (n.type === 'text') texts++;
@@ -426,7 +443,9 @@
         a.click();
         URL.revokeObjectURL(a.href);
         status.textContent = 'Downloaded ' + data.sets.length + ' sets, ' + count + ' variants: ' + layers + ' layers (' + filled + ' filled boxes, ' + texts + ' text, ' + icons + ' icons).' +
-          (empty ? ' Warning: ' + empty + ' variants captured nothing — Polaris may be hiding its internals; tell Claude.' : ' Load the file in the Figma plugin.');
+          (empty ? ' Warning: ' + empty + ' variants captured nothing — Polaris may be hiding its internals; tell Claude.' : '') +
+          (outside ? ' Warning: ' + outside + ' layers fall outside their parent and may be clipped in Figma; tell Claude.' : '') +
+          (empty || outside ? '' : ' Load the file in the Figma plugin.');
       } catch (e) {
         console.error(e);
         status.textContent = 'Export failed: ' + e.message;

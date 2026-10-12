@@ -544,6 +544,7 @@ async function buildComponents(data) {
     var cs = figma.combineAsVariants(comps, page);
     cs.name = set.name;
     cs.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+    cs.clipsContent = false;
     var widest = comps.reduce(function (m, c) { return Math.max(m, c.width); }, 0);
     cs.layoutMode = 'HORIZONTAL';
     cs.layoutWrap = 'WRAP';
