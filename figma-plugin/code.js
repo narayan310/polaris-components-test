@@ -507,7 +507,7 @@ async function buildComponents(data) {
   page.name = data.version + ' components';
   await figma.setCurrentPageAsync(page);
 
-  var y = 0, variants = 0, sets = 0;
+  var y = 0, variants = 0, sets = 0, emptyVariants = 0;
   for (var s = 0; s < data.sets.length; s++) {
     var set = data.sets[s];
     if (!set.items.length) continue;
@@ -517,6 +517,7 @@ async function buildComponents(data) {
       var item = set.items[i];
       var comp = figma.createComponent();
       var root = item.tree;
+      if (!root.children.length) emptyVariants++;
       if (root.children.length === 1) {
         // Wrap the component in a vertical auto layout so it hugs (or stretches to a fixed width).
         root = Object.assign({}, root, {
@@ -560,6 +561,7 @@ async function buildComponents(data) {
     'Text layers using your text styles: ' + ctx.textStyled + '.',
   ];
   Object.keys(ctx.fallbacks).forEach(function (f) { report.push('Font fallback: ' + f + '.'); });
+  if (emptyVariants) report.unshift('WARNING: ' + emptyVariants + ' of ' + variants + ' variants were empty in the export, so their components are empty. Re-export from the latest capture page.', '');
   if (ctx.svgFailures) report.push(ctx.svgFailures + ' icons could not be imported and are grey placeholders.');
   report.push('Images (avatars, thumbnails) are grey placeholders; drop real images in as fills.');
   return report;

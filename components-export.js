@@ -306,13 +306,21 @@
     setTimeout(function () {
       try {
         var data = exportAll();
-        var count = data.sets.reduce(function (n, s) { return n + s.items.length; }, 0);
+        var count = 0, empty = 0, layers = 0;
+        data.sets.forEach(function (s) {
+          s.items.forEach(function (i) {
+            count++;
+            if (!i.tree.children.length) empty++;
+            (function walk(n) { layers++; (n.children || []).forEach(walk); })(i.tree);
+          });
+        });
         var a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
         a.download = 'polaris-components-' + data.version.replace(/\W+/g, '-').toLowerCase() + '.json';
         a.click();
         URL.revokeObjectURL(a.href);
-        status.textContent = 'Downloaded ' + data.sets.length + ' sets, ' + count + ' variants. Load the file in the Figma plugin.';
+        status.textContent = 'Downloaded ' + data.sets.length + ' sets, ' + count + ' variants, ' + layers + ' layers.' +
+          (empty ? ' Warning: ' + empty + ' variants captured nothing — Polaris may be hiding its internals; tell Claude.' : ' Load the file in the Figma plugin.');
       } catch (e) {
         console.error(e);
         status.textContent = 'Export failed: ' + e.message;
