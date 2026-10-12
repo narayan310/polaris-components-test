@@ -58,9 +58,11 @@ The plugin creates a new page with 24 component sets (169 variants):
 
 Re-running creates a fresh page, so the earlier result stays intact for comparison.
 
-Also captured: absolutely positioned `::before`/`::after` layers (borders, bevels, overlays), gradient backgrounds (approximated as solid layers) and icons drawn as CSS masks. Polaris' `ShopifyInter` font falls back to Inter.
+Also captured: absolutely positioned `::before`/`::after` layers (borders, bevels, overlays), linear and radial gradient backgrounds (as Figma gradients), multi-layer shadows including spread (frames using spread get **Clip content**, which Figma needs to apply it), and icons drawn as CSS masks. Hidden text (e.g. a loading button's label) is kept, without a fill, so components keep their size. Polaris' `ShopifyInter` font falls back to Inter.
 
-Not covered: overlays (modal, popover, menu, tooltip), which only render while open; non-positioned pseudo-elements; raster background images.
+If something doesn't match the browser, press **Copy debug info** on the capture page: it copies the raw computed styles of a few representative variants as pasteable text.
+
+Not covered: overlays (modal, popover, menu, tooltip), which only render while open; non-positioned pseudo-elements; raster background images; animation (the loading spinner is captured as a single frame).
 
 Alternative: capture `capture.html` with the **html.to.design** plugin, then name each frame with its caption, make it a component and **Combine as variants**.
 
@@ -68,4 +70,3 @@ Alternative: capture `capture.html` with the **html.to.design** plugin, then nam
 
 Build the patterns in `patterns.html` from instances of your new components rather than importing them.
 
-Polaris renders inside Shadow DOM, so capture a single set first and check the result before importing everything.
