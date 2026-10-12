@@ -180,38 +180,166 @@
     return new XMLSerializer().serializeToString(clone);
   }
 
+  // Like rgba(), but keeps fully transparent colors (gradient stops fade to them).
+  function rgbaStop(value) {
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = 'rgba(0,0,0,0)';
+    ctx.fillStyle = value;
+    ctx.fillRect(0, 0, 1, 1);
+    var d = ctx.getImageData(0, 0, 1, 1).data;
+    if (d[3] === 0) {
+      // Canvas zeroes the RGB of transparent pixels; recover it from the color string if we can.
+      var m = value.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
+      return m ? { r: m[1] / 255, g: m[2] / 255, b: m[3] / 255, a: 0 } : { r: 0, g: 0, b: 0, a: 0 };
+    }
+    return { r: d[0] / 255, g: d[1] / 255, b: d[2] / 255, a: Math.round((d[3] / 255) * 1000) / 1000 };
+  }
+
+  var COLOR_START = /^([a-z][a-z-]*\([^()]*\)|#[0-9a-f]{3,8}\b|[a-z]+)/i;
+
+  function isColor(token) { return CSS.supports('color', token); }
+
+  // "rgba(…) 20%", "rgba(…) 4px" -> {color, pos (fraction of the gradient length or null)}
+  function parseStops(parts, length) {
+    var stops = parts.map(function (p) {
+      var m = p.trim().match(COLOR_START);
+      if (!m || !isColor(m[1])) return null;
+      var rest = p.trim().slice(m[1].length).trim().split(/\s+/)[0];
+      var pos = null;
+      if (/%$/.test(rest)) pos = parseFloat(rest) / 100;
+      else if (/px$/.test(rest)) pos = length ? parseFloat(rest) / length : 0;
+      return { color: rgbaStop(m[1]), pos: pos };
+    }).filter(Boolean);
+    if (!stops.length) return null;
+    // CSS rules: first defaults to 0, last to 1, missing ones spread evenly between neighbours,
+    // and a stop never sits before the previous one.
+    if (stops[0].pos == null) stops[0].pos = 0;
+    if (stops[stops.length - 1].pos == null) stops[stops.length - 1].pos = Math.max(1, stops[0].pos);
+    for (var i = 1; i < stops.length; i++) {
+      if (stops[i].pos == null) {
+        var j = i;
+        while (stops[j].pos == null) j++;
+        for (var k = i; k < j; k++) stops[k].pos = stops[i - 1].pos + (stops[j].pos - stops[i - 1].pos) * (k - i + 1) / (j - i + 1);
+      }
+      if (stops[i].pos < stops[i - 1].pos) stops[i].pos = stops[i - 1].pos;
+    }
+    return stops.map(function (s) { return { position: Math.round(s.pos * 10000) / 10000, color: s.color }; });
+  }
+
+  function lengthIn(token, total) {
+    if (/%$/.test(token)) return parseFloat(token) / 100 * total;
+    return px(token);
+  }
+
+  var KEYWORD_POS = { left: 0, top: 0, center: 50, right: 100, bottom: 100 };
+
+  function position(tokens, w, h) {
+    var x = w / 2, y = h / 2;
+    if (tokens[0]) {
+      var t0 = tokens[0], t1 = tokens[1];
+      if (t0 === 'top' || t0 === 'bottom') { var tmp = t0; t0 = t1 || 'center'; t1 = tmp; }
+      x = t0 in KEYWORD_POS ? KEYWORD_POS[t0] / 100 * w : lengthIn(t0, w);
+      if (t1) y = t1 in KEYWORD_POS ? KEYWORD_POS[t1] / 100 * h : lengthIn(t1, h);
+    }
+    return { x: x, y: y };
+  }
+
+  // Figma gradientTransform maps normalised layer coordinates to gradient space, where a linear
+  // gradient runs from (0, .5) to (1, .5) and a radial one is the ellipse inscribed in the unit square.
+  function linearGradient(prelude, parts, w, h) {
+    var angle = Math.PI; // CSS default: to bottom
+    if (prelude) {
+      var deg = prelude.match(/(-?[\d.]+)(deg|rad|turn|grad)/);
+      if (deg) {
+        var v = parseFloat(deg[1]);
+        angle = deg[2] === 'deg' ? v * Math.PI / 180 : deg[2] === 'rad' ? v : deg[2] === 'turn' ? v * 2 * Math.PI : v * Math.PI / 200;
+      } else if (/^to /.test(prelude)) {
+        var sx = /right/.test(prelude) ? 1 : /left/.test(prelude) ? -1 : 0;
+        var sy = /bottom/.test(prelude) ? 1 : /top/.test(prelude) ? -1 : 0;
+        var vx = sx && sy ? sx * h : sx, vy = sx && sy ? sy * w : sy;
+        angle = Math.atan2(vx, -vy);
+      }
+    }
+    var dx = Math.sin(angle), dy = -Math.cos(angle);
+    var L = Math.abs(w * dx) + Math.abs(h * dy);
+    var stops = parseStops(parts, L);
+    if (!stops) return null;
+    // Project in pixel space (so the angle survives non-square boxes), then express the result
+    // per normalised coordinate: t = ((x*w, y*h) - start) . d / L.
+    var sx0 = w / 2 - dx * L / 2, sy0 = h / 2 - dy * L / 2;
+    var nx = -dy, ny = dx;
+    return {
+      type: 'gradient', kind: 'linear', stops: stops,
+      transform: [
+        [dx * w / L, dy * h / L, -(sx0 * dx + sy0 * dy) / L],
+        [nx * w / L, ny * h / L, 0.5 - (sx0 * nx + sy0 * ny) / L],
+      ],
+    };
+  }
+
+  function radialGradient(prelude, parts, w, h) {
+    var sizePart = prelude || '', posPart = '';
+    var at = sizePart.indexOf('at ');
+    if (at !== -1) { posPart = sizePart.slice(at + 3).trim(); sizePart = sizePart.slice(0, at).trim(); }
+    var c = position(posPart ? posPart.split(/\s+/) : [], w, h);
+    var tokens = sizePart.split(/\s+/).filter(Boolean);
+    var circle = tokens.indexOf('circle') !== -1;
+    tokens = tokens.filter(function (t) { return t !== 'circle' && t !== 'ellipse'; });
+    var sideX = [c.x, w - c.x], sideY = [c.y, h - c.y];
+    var keyword = tokens[0] && /side|corner/.test(tokens[0]) ? tokens[0] : (tokens.length ? null : 'farthest-corner');
+    var rx, ry;
+    if (keyword) {
+      var fx = keyword.indexOf('closest') === 0 ? Math.min.apply(null, sideX) : Math.max.apply(null, sideX);
+      var fy = keyword.indexOf('closest') === 0 ? Math.min.apply(null, sideY) : Math.max.apply(null, sideY);
+      if (/corner/.test(keyword)) {
+        if (circle) rx = ry = Math.sqrt(fx * fx + fy * fy);
+        else { rx = fx * Math.SQRT2; ry = fy * Math.SQRT2; }
+      } else if (circle) {
+        rx = ry = keyword.indexOf('closest') === 0 ? Math.min(fx, fy) : Math.max(fx, fy);
+      } else { rx = fx; ry = fy; }
+    } else {
+      rx = lengthIn(tokens[0], w);
+      ry = tokens[1] ? lengthIn(tokens[1], h) : rx;
+    }
+    if (!(rx > 0) || !(ry > 0)) return null;
+    var stops = parseStops(parts, rx);
+    if (!stops) return null;
+    var cx = c.x / w, cy = c.y / h, rxn = rx / w, ryn = ry / h;
+    return {
+      type: 'gradient', kind: 'radial', stops: stops,
+      transform: [
+        [1 / (2 * rxn), 0, 0.5 - cx / (2 * rxn)],
+        [0, 1 / (2 * ryn), 0.5 - cy / (2 * ryn)],
+      ],
+    };
+  }
+
   // Background layers, bottom to top: background-color, then each background-image gradient
-  // (CSS lists images top-first). Gradients are approximated by the average of their stops,
-  // which is exact for the common "solid color as a gradient" trick.
-  function backgroundFills(cs) {
+  // (CSS lists images top-first), as real linear/radial gradients sized to the box.
+  function backgroundFills(cs, w, h) {
     var fills = [];
     var base = rgba(cs.backgroundColor);
     if (base) fills.push(base);
-    if (cs.backgroundImage && cs.backgroundImage !== 'none') {
+    if (cs.backgroundImage && cs.backgroundImage !== 'none' && w > 0 && h > 0) {
       splitTop(cs.backgroundImage).reverse().forEach(function (layer) {
-        if (layer.indexOf('gradient') === -1) return;
-        var stops = layer.match(/(rgba?\([^)]*\)|oklch\([^)]*\)|oklab\([^)]*\)|color\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]{3,8})/gi) || [];
-        var sum = { r: 0, g: 0, b: 0, a: 0 }, n = 0;
-        stops.forEach(function (s) {
-          ctx.clearRect(0, 0, 1, 1);
-          ctx.fillStyle = 'rgba(0,0,0,0)';
-          ctx.fillStyle = s;
-          ctx.fillRect(0, 0, 1, 1);
-          var d = ctx.getImageData(0, 0, 1, 1).data, a = d[3] / 255;
-          sum.r += d[0] / 255 * a; sum.g += d[1] / 255 * a; sum.b += d[2] / 255 * a; sum.a += a; n++;
-        });
-        if (!n || sum.a === 0) return;
-        fills.push({ r: sum.r / sum.a, g: sum.g / sum.a, b: sum.b / sum.a, a: Math.round(sum.a / n * 1000) / 1000 });
+        var m = layer.match(/^(linear|radial)-gradient\((.*)\)$/);
+        if (!m) return;
+        var parts = splitTop(m[2]);
+        var first = parts[0].trim();
+        var firstColor = first.match(COLOR_START);
+        var prelude = firstColor && isColor(firstColor[1]) ? null : parts.shift().trim();
+        var g = m[1] === 'linear' ? linearGradient(prelude, parts, w, h) : radialGradient(prelude, parts, w, h);
+        if (g && g.stops.some(function (s) { return s.color.a > 0; })) fills.push(g);
       });
     }
-    // Anything under a fully opaque layer is invisible.
-    for (var i = fills.length - 1; i > 0; i--) if (fills[i].a >= 1) return fills.slice(i);
+    // Anything under a fully opaque solid layer is invisible.
+    for (var i = fills.length - 1; i > 0; i--) if (fills[i].type !== 'gradient' && fills[i].a >= 1) return fills.slice(i);
     return fills;
   }
 
   var SIDES = ['Top', 'Right', 'Bottom', 'Left'];
 
-  function boxStyle(cs) {
+  function boxStyle(cs, w, h) {
     var borderColor = null;
     var borders = SIDES.map(function (s) {
       var w = cs['border' + s + 'Style'] === 'none' ? 0 : px(cs['border' + s + 'Width']);
@@ -219,7 +347,7 @@
       return w;
     });
     return {
-      fills: backgroundFills(cs),
+      fills: backgroundFills(cs, w, h),
       stroke: borderColor ? { color: borderColor, widths: borders } : null,
       borders: borders,
       radius: [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].map(px),
@@ -273,7 +401,7 @@
     var base = { name: which, x: round(x - origin.left), y: round(y - origin.top), w: round(w), h: round(h), position: 'absolute', grow: 0, alignSelf: 'auto' };
     var icon = maskSvg(cs, w, h);
     if (icon) return Object.assign(base, { type: 'svg', svg: icon });
-    var box = boxStyle(cs);
+    var box = boxStyle(cs, w, h);
     var node = Object.assign(base, box, { type: 'frame', clip: false, children: [] });
     delete node.borders;
     return hasVisuals(node) ? node : null;
@@ -302,7 +430,7 @@
 
     var maskIcon = maskSvg(cs, r.width, r.height);
     if (maskIcon && r.width && r.height) return Object.assign(base, { type: 'svg', svg: maskIcon });
-    var box = boxStyle(cs);
+    var box = boxStyle(cs, r.width, r.height);
     var borders = box.borders;
     delete box.borders;
     var sides = SIDES;

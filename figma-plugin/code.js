@@ -341,6 +341,16 @@ function roleScore(name, role) {
 }
 
 function paint(c, binder, role) {
+  if (c.type === 'gradient') {
+    binder.raw++;
+    return {
+      type: c.kind === 'radial' ? 'GRADIENT_RADIAL' : 'GRADIENT_LINEAR',
+      gradientTransform: c.transform,
+      gradientStops: c.stops.map(function (s) {
+        return { position: Math.min(1, Math.max(0, s.position)), color: s.color };
+      }),
+    };
+  }
   var solid = { type: 'SOLID', color: { r: c.r, g: c.g, b: c.b }, opacity: c.a == null ? 1 : c.a };
   var candidates = binder.colors[colorKey(c)];
   if (candidates && candidates.length) {
@@ -524,6 +534,14 @@ async function buildNode(node, ctx, target) {
     }
     built.push({ node: childNode, child: child });
   }
+
+  // Figma only applies shadow spread to frames that clip their content. Polaris uses spread for
+  // tight shadows (negative) and for 1px rings in place of borders (checkboxes), so turn clipping
+  // on when the content stays inside the box anyway.
+  var spread = (node.effects || []).some(function (e) { return e.spread; });
+  if (spread && node.children.every(function (ch) {
+    return ch.x >= node.x - 0.5 && ch.y >= node.y - 0.5 && ch.x + ch.w <= node.x + node.w + 0.5 && ch.y + ch.h <= node.y + node.h + 0.5;
+  })) frame.clipsContent = true;
 
   if (L) {
     var horizontal = frame.layoutMode === 'HORIZONTAL';
