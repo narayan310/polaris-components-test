@@ -308,8 +308,7 @@ async function makeBinder(version) {
       var val = v.valuesByMode[mode.modeId];
       if (!val || val.type === 'VARIABLE_ALIAS') return;
       var key = colorKey(val);
-      // Prefer Polaris' own token names over the sampled "Rendered/" names.
-      if (!colors[key] || (v.name.indexOf('Tokens/') === 0 && colors[key].name.indexOf('Tokens/') !== 0)) colors[key] = v;
+      (colors[key] = colors[key] || []).push(v);
     });
   }
   var textStyles = await figma.getLocalTextStylesAsync();
@@ -321,12 +320,38 @@ async function makeBinder(version) {
   return { colors: colors, styles: styles, hasVariables: !!collection, bound: 0, raw: 0 };
 }
 
-function paint(c, binder) {
+// Several variables can share a value (e.g. a button fill and an avatar text token are both
+// #101010), so a value match alone can pick a misleading name. Rank candidates by how well the
+// name fits the role the color plays here: fill, text or border.
+var ROLE_WORDS = {
+  fill: /(^|\/|-)(bg|fill|surface|background|button|badge|banner|box|card)/,
+  text: /(^|\/|-)(text|label|link|fg|foreground)/,
+  border: /(^|\/|-)(border|divider|stroke|outline)/,
+};
+
+function roleScore(name, role) {
+  var n = name.toLowerCase();
+  var fits = ROLE_WORDS[role].test(n);
+  var clashes = Object.keys(ROLE_WORDS).some(function (r) { return r !== role && ROLE_WORDS[r].test(n) && !fits; });
+  var score = n.indexOf('rendered/') === 0 ? 50 : 0;
+  if (fits) score += 40;
+  if (clashes) score -= 40;
+  if (/-[0-9a-f]{5}$/.test(n)) score -= 10; // generated hash suffixes read as noise
+  return score;
+}
+
+function paint(c, binder, role) {
   var solid = { type: 'SOLID', color: { r: c.r, g: c.g, b: c.b }, opacity: c.a == null ? 1 : c.a };
-  var v = binder.colors[colorKey(c)];
-  if (v) {
-    binder.bound++;
-    return figma.variables.setBoundVariableForPaint({ type: 'SOLID', color: solid.color }, 'color', v);
+  var candidates = binder.colors[colorKey(c)];
+  if (candidates && candidates.length) {
+    var best = candidates.slice().sort(function (a, b) {
+      return roleScore(b.name, role) - roleScore(a.name, role) || a.name.length - b.name.length;
+    })[0];
+    // Only bind when the name plausibly describes this use; a raw value beats a wrong name.
+    if (roleScore(best.name, role) >= 0) {
+      binder.bound++;
+      return figma.variables.setBoundVariableForPaint({ type: 'SOLID', color: solid.color }, 'color', best);
+    }
   }
   binder.raw++;
   return solid;
@@ -340,9 +365,9 @@ function size(n, w, h) { n.resize(Math.max(w, 0.01), Math.max(h, 0.01)); }
 function applyBox(frame, node, binder) {
   frame.name = node.name;
   var fills = node.fills || (node.fill ? [node.fill] : []);
-  frame.fills = fills.map(function (f) { return paint(f, binder); });
+  frame.fills = fills.map(function (f) { return paint(f, binder, 'fill'); });
   if (node.stroke) {
-    frame.strokes = [paint(node.stroke.color, binder)];
+    frame.strokes = [paint(node.stroke.color, binder, 'border')];
     frame.strokeAlign = 'INSIDE';
     frame.strokeTopWeight = node.stroke.widths[0];
     frame.strokeRightWeight = node.stroke.widths[1];
@@ -390,7 +415,7 @@ async function buildText(node, ctx) {
     t.lineHeight = { unit: 'PIXELS', value: node.lineHeight };
     t.letterSpacing = { unit: 'PIXELS', value: node.letterSpacing || 0 };
   }
-  if (node.color) t.fills = [paint(node.color, ctx.binder)];
+  if (node.color) t.fills = [paint(node.color, ctx.binder, 'text')];
   if (node.underline) t.textDecoration = 'UNDERLINE';
   t.textAlignHorizontal = node.align === 'center' ? 'CENTER' : node.align === 'right' || node.align === 'end' ? 'RIGHT' : 'LEFT';
   if (node.wrap) {
@@ -565,7 +590,7 @@ async function buildComponents(data) {
     'Built ' + sets + ' component sets (' + variants + ' variants) on page "' + page.name + '".',
     'Export: ' + (data.exportVersion ? 'v' + data.exportVersion : 'OLD FORMAT — re-export from the latest capture page') + ', captured ' + (data.capturedAt || '?') + '.',
     ctx.binder.hasVariables
-      ? 'Colors: ' + ctx.binder.bound + ' bound to Polaris variables, ' + ctx.binder.raw + ' left as raw values (no exact variable match).'
+      ? 'Colors: ' + ctx.binder.bound + ' bound to Polaris variables, ' + ctx.binder.raw + ' left as raw values (no variable with that value and a fitting name).'
       : 'No "Polaris" variable collection found, so colors are raw values. Import the foundations first to bind them.',
     'Text layers using your text styles: ' + ctx.textStyled + '.',
   ];
