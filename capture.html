@@ -27,7 +27,8 @@
     .cap-frame { display: inline-block; }
     .cap-frame.fixed { display: block; }
     #cap-export { font: 600 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 8px; border: 0; background: #303030; color: #fff; cursor: pointer; }
-    #cap-export:disabled { opacity: .4; cursor: default; }
+    #cap-export:disabled, .cap-secondary:disabled { opacity: .4; cursor: default; }
+    .cap-secondary { font: 600 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 8px; border: 1px solid #c9c9c9; background: #fff; color: #303030; cursor: pointer; margin-left: 4px; }
     #cap-export-status { margin-left: 8px; color: #616161; }
   </style>
 </head>
@@ -39,8 +40,10 @@
     <p><b>To build native Figma components:</b> export this sheet and load the file in the Polaris Foundations plugin. Import the foundations first so the components can use your variables and text styles.</p>
     <p>
       <button id="cap-export" disabled>Export components JSON</button>
+      <button id="cap-debug" class="cap-secondary" disabled>Copy debug info</button>
       <span id="cap-export-status">Waiting for Polaris…</span>
     </p>
+    <textarea id="cap-debug-text" readonly style="display:none;width:100%;height:200px;font:11px/1.4 ui-monospace,Menlo,monospace"></textarea>
     <p><a href="index.html">← Components page</a></p>
   </div>
   <div id="cap"></div>

@@ -415,7 +415,9 @@ async function buildText(node, ctx) {
     t.lineHeight = { unit: 'PIXELS', value: node.lineHeight };
     t.letterSpacing = { unit: 'PIXELS', value: node.letterSpacing || 0 };
   }
+  // No color = hidden in the browser (e.g. a loading button's label under its spinner).
   if (node.color) t.fills = [paint(node.color, ctx.binder, 'text')];
+  else { t.fills = []; t.name = (node.name || 'Text') + ' (hidden)'; }
   if (node.underline) t.textDecoration = 'UNDERLINE';
   t.textAlignHorizontal = node.align === 'center' ? 'CENTER' : node.align === 'right' || node.align === 'end' ? 'RIGHT' : 'LEFT';
   if (node.wrap) {

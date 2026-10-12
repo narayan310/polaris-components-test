@@ -119,6 +119,9 @@
     var box = range.getBoundingClientRect();
     var cs = getComputedStyle(styleEl);
     var f = fontInfo(cs);
+    // Hidden or transparent text still takes up space (e.g. a loading button keeps its label to
+    // hold its width under the spinner): keep the layer for sizing, but with no color.
+    if (cs.visibility !== 'visible') f.color = null;
     var tops = {};
     rects.forEach(function (r) { tops[Math.round(r.top)] = 1; });
     var lines = Object.keys(tops).length;
@@ -401,6 +404,65 @@
 
   window.polarisExportComponents = exportAll;
 
+  // ---------- debug info ----------
+  // Raw computed styles for a few representative variants, short enough to paste into a chat.
+  var DEBUG_VARIANTS = [
+    ['Button', 'Variant=Primary, Tone=Auto, State=Default'],
+    ['Button', 'Variant=Primary, Tone=Auto, State=Loading'],
+    ['Checkbox', 'State=Unchecked, Disabled=No'],
+    ['Banner', 'Tone=Info, Heading=Yes'],
+  ];
+  var DEBUG_PROPS = ['display', 'position', 'backgroundColor', 'backgroundImage', 'borderTopWidth', 'borderTopStyle', 'borderTopColor',
+    'borderRadius', 'boxShadow', 'outline', 'filter', 'opacity', 'visibility', 'color', 'maskImage', 'appearance'];
+  var DEFAULTS = { display: 'inline', position: 'static', backgroundColor: 'rgba(0, 0, 0, 0)', backgroundImage: 'none', borderTopWidth: '0px',
+    borderTopStyle: 'none', borderRadius: '0px', boxShadow: 'none', filter: 'none', opacity: '1', visibility: 'visible', maskImage: 'none', appearance: 'none' };
+
+  function styleLine(cs) {
+    return DEBUG_PROPS.map(function (p) {
+      var v = cs[p];
+      if (v == null || v === '' || DEFAULTS[p] === v) return null;
+      if (p === 'borderTopColor' && cs.borderTopStyle === 'none') return null;
+      if (p === 'outline' && /none|0px/.test(v)) return null;
+      return p + '=' + (v.length > 160 ? v.slice(0, 160) + '…' : v);
+    }).filter(Boolean).join('; ');
+  }
+
+  function debugFrame(frame) {
+    var origin = frame.getBoundingClientRect(), lines = [], max = 45;
+    (function walk(el, depth) {
+      if (lines.length >= max) return;
+      renderedChildren(el).forEach(function (c) {
+        if (lines.length >= max) return;
+        var pad = Array(depth + 1).join('  ');
+        if (c.node.nodeType === 3) {
+          var cs = getComputedStyle(c.styleEl);
+          lines.push(pad + 'TEXT "' + c.node.textContent.trim().slice(0, 30) + '" color=' + cs.color + ' font=' + cs.fontWeight + ' ' + cs.fontSize + ' visibility=' + cs.visibility);
+          return;
+        }
+        var n = c.node, r = n.getBoundingClientRect();
+        lines.push(pad + nameOf(n) + ' [' + round(r.left - origin.left) + ',' + round(r.top - origin.top) + ' ' + round(r.width) + 'x' + round(r.height) + '] ' + styleLine(getComputedStyle(n)));
+        ['::before', '::after'].forEach(function (w) {
+          var ps = getComputedStyle(n, w);
+          if (ps.content && ps.content !== 'none' && ps.content !== 'normal') lines.push(pad + '  ' + w + ' content=' + ps.content.slice(0, 20) + ' inset=' + ps.top + '/' + ps.right + '/' + ps.bottom + '/' + ps.left + ' size=' + ps.width + 'x' + ps.height + ' ' + styleLine(ps));
+        });
+        if (n.tagName !== 'svg') walk(n, depth + 1);
+      });
+    })(frame, 0);
+    return lines;
+  }
+
+  function debugInfo() {
+    var out = ['Polaris debug — ' + (document.querySelector('script[src*="cdn.shopify.com/shopifycloud/"]') || {}).src];
+    DEBUG_VARIANTS.forEach(function (v) {
+      var setEl = document.querySelector('.cap-set[data-set="' + v[0] + '"]');
+      var frame = setEl && Array.prototype.filter.call(setEl.querySelectorAll('.cap-frame'), function (f) { return f.getAttribute('data-name') === v[1]; })[0];
+      out.push('', '## ' + v[0] + ' / ' + v[1]);
+      out = out.concat(frame ? debugFrame(frame) : ['(not found)']);
+    });
+    return out.join('\n');
+  }
+  window.polarisDebugInfo = debugInfo;
+
   var button = document.getElementById('cap-export');
   var status = document.getElementById('cap-export-status');
   var tags = ['s-button', 's-badge', 's-text-field', 's-section'];
@@ -409,9 +471,24 @@
     return new Promise(function (r) { setTimeout(r, 800); });
   }).then(function () {
     button.disabled = false;
+    debugButton.disabled = false;
     status.textContent = 'Ready.';
   }, function () {
     status.textContent = 'Polaris did not load, so there is nothing to export.';
+  });
+
+  var debugButton = document.getElementById('cap-debug');
+  debugButton.addEventListener('click', function () {
+    var text = debugInfo();
+    var box = document.getElementById('cap-debug-text');
+    box.value = text;
+    box.style.display = 'block';
+    box.select();
+    navigator.clipboard.writeText(text).then(function () {
+      status.textContent = 'Debug info copied (' + text.length + ' characters). Paste it to Claude.';
+    }, function () {
+      status.textContent = 'Clipboard blocked: copy the debug info from the box below.';
+    });
   });
 
   button.addEventListener('click', function () {
