@@ -8,7 +8,7 @@ figma.ui.onmessage = async function (msg) {
   if (msg.type !== 'import') return;
   try {
     var isComponents = msg.data && msg.data.kind === 'polaris-components';
-    var report = isComponents ? await buildComponents(msg.data) : await importFoundations(msg.data, msg.options || {});
+    var report = isComponents ? await buildComponents(msg.data, msg.options || {}) : await importFoundations(msg.data, msg.options || {});
     figma.ui.postMessage({ type: 'done', report: report });
     figma.notify(isComponents ? 'Polaris components built' : 'Polaris foundations imported');
   } catch (e) {
@@ -398,8 +398,31 @@ function applyBox(frame, node, binder) {
   frame.clipsContent = !!node.clip;
 }
 
-async function buildText(node, ctx) {
-  var t = figma.createText();
+// Every node the builder creates is tagged with its kind, so a re-import can recognise and reuse
+// it. Reusing nodes keeps their ids, which is what keeps instance overrides (e.g. a button label
+// changed to "Save") alive across library updates.
+var KIND_KEY = 'polarisKind';
+function tag(n, kind) { n.setPluginData(KIND_KEY, kind); return n; }
+function reusable(existing, node) {
+  if (!existing) return false;
+  // Nodes built before kinds were tagged: infer the kind from the node type.
+  var kind = existing.getPluginData(KIND_KEY) ||
+    (existing.type === 'TEXT' ? 'text' : existing.type === 'RECTANGLE' && existing.name === 'Image' ? 'image' : existing.type === 'FRAME' ? 'frame' : '');
+  if (node.type === 'text') return kind === 'text' && existing.type === 'TEXT';
+  if (node.type === 'image') return kind === 'image' && existing.type === 'RECTANGLE';
+  if (node.type === 'frame') return kind === 'frame' && existing.type === 'FRAME';
+  return false; // vectors are always rebuilt: their geometry can't be updated in place
+}
+
+async function loadExistingFonts(t) {
+  if (!t.characters.length) return;
+  var fonts = t.fontName === figma.mixed ? t.getRangeAllFontNames(0, t.characters.length) : [t.fontName];
+  for (var i = 0; i < fonts.length; i++) await figma.loadFontAsync(fonts[i]);
+}
+
+async function buildText(node, ctx, existing) {
+  var t = existing || tag(figma.createText(), 'text');
+  if (existing) await loadExistingFonts(existing);
   var key = node.fontFamily + '|' + node.fontWeight + '|' + node.italic;
   var font = ctx.fonts[key];
   if (font === undefined) {
@@ -413,10 +436,11 @@ async function buildText(node, ctx) {
     if (pick && pick.fallback) ctx.fallbacks[node.fontFamily.split(',')[0].trim() + ' → ' + font.family] = 1;
     ctx.fonts[key] = font;
   }
-  if (font) t.fontName = font;
-  t.characters = node.characters;
-  t.name = node.name || node.characters.slice(0, 24);
   var style = font && ctx.binder.styles[[font.family, font.style, node.fontSize, node.lineHeight].join('|')];
+  if (!style && t.textStyleId) await t.setTextStyleIdAsync('');
+  if (font) t.fontName = font;
+  if (t.characters !== node.characters) t.characters = node.characters;
+  t.name = node.name || node.characters.slice(0, 24);
   if (style) {
     await t.setTextStyleIdAsync(style.id);
     ctx.textStyled++;
@@ -428,7 +452,7 @@ async function buildText(node, ctx) {
   // No color = hidden in the browser (e.g. a loading button's label under its spinner).
   if (node.color) t.fills = [paint(node.color, ctx.binder, 'text')];
   else { t.fills = []; t.name = (node.name || 'Text') + ' (hidden)'; }
-  if (node.underline) t.textDecoration = 'UNDERLINE';
+  t.textDecoration = node.underline ? 'UNDERLINE' : 'NONE';
   t.textAlignHorizontal = node.align === 'center' ? 'CENTER' : node.align === 'right' || node.align === 'end' ? 'RIGHT' : 'LEFT';
   if (node.wrap) {
     t.textAutoResize = 'HEIGHT';
@@ -441,13 +465,13 @@ async function buildText(node, ctx) {
 
 function buildSvg(node, ctx) {
   try {
-    var f = figma.createNodeFromSvg(node.svg);
+    var f = tag(figma.createNodeFromSvg(node.svg), 'svg');
     f.name = node.name === 'svg' ? 'Icon' : node.name;
     size(f, node.w, node.h);
     return f;
   } catch (e) {
     ctx.svgFailures++;
-    var r = figma.createRectangle();
+    var r = tag(figma.createRectangle(), 'svg');
     r.name = 'Icon (could not import SVG)';
     size(r, node.w, node.h);
     r.fills = [{ type: 'SOLID', color: { r: 0.8, g: 0.8, b: 0.8 } }];
@@ -482,11 +506,14 @@ function measuredLayout(node, L) {
   return out;
 }
 
+// Builds `node` into `target` when given (an existing frame or component), else into a new frame.
+// Children are reconciled by position: an existing child of the same kind and name is updated in
+// place; anything else is created fresh, and leftovers are removed.
 async function buildNode(node, ctx, target) {
-  if (node.type === 'text') return buildText(node, ctx);
+  if (node.type === 'text') return buildText(node, ctx, target);
   if (node.type === 'svg') return buildSvg(node, ctx);
   if (node.type === 'image') {
-    var img = figma.createRectangle();
+    var img = target || tag(figma.createRectangle(), 'image');
     img.name = 'Image';
     size(img, node.w, node.h);
     img.cornerRadius = (node.radius && node.radius[0]) || 0;
@@ -494,9 +521,8 @@ async function buildNode(node, ctx, target) {
     return img;
   }
 
-  var frame = target || figma.createFrame();
+  var frame = target || tag(figma.createFrame(), 'frame');
   applyBox(frame, node, ctx.binder);
-  size(frame, node.w, node.h);
   var L = node.layout ? measuredLayout(node, node.layout) : null;
   if (node.layout && !L) ctx.absoluteLayouts++;
   if (L) {
@@ -509,22 +535,31 @@ async function buildNode(node, ctx, target) {
     frame.primaryAxisAlignItems = JUSTIFY[L.justify] || 'MIN';
     var align = ALIGN[L.align] || 'MIN';
     frame.counterAxisAlignItems = align === 'BASELINE' && frame.layoutMode !== 'HORIZONTAL' ? 'MIN' : align;
-    if (L.wrap && frame.layoutMode === 'HORIZONTAL') {
-      frame.layoutWrap = 'WRAP';
-      frame.counterAxisSpacing = L.crossGap;
+    if (frame.layoutMode === 'HORIZONTAL') {
+      frame.layoutWrap = L.wrap ? 'WRAP' : 'NO_WRAP';
+      if (L.wrap) frame.counterAxisSpacing = L.crossGap;
     }
     frame.primaryAxisSizingMode = 'FIXED';
     frame.counterAxisSizingMode = 'FIXED';
+  } else {
+    frame.layoutMode = 'NONE';
   }
+  size(frame, node.w, node.h);
 
+  var old = frame.children.slice(), used = [];
   var built = [];
   for (var i = 0; i < node.children.length; i++) {
     var childNode = node.children[i];
-    var child = await buildNode(childNode, ctx);
-    frame.appendChild(child);
+    var candidate = reusable(old[i], childNode) && old[i].name.replace(/ \(hidden\)$/, '') === (childNode.name || old[i].name).replace(/ \(hidden\)$/, '') ? old[i] : null;
+    var child = await buildNode(childNode, ctx, candidate);
+    if (candidate) { used.push(candidate); ctx.reused++; tag(candidate, childNode.type); } else ctx.created++;
+    frame.insertChild(i, child);
     if (L) {
-      if (childNode.position === 'absolute') {
-        child.layoutPositioning = 'ABSOLUTE';
+      child.layoutPositioning = childNode.position === 'absolute' ? 'ABSOLUTE' : 'AUTO';
+      if (childNode.position !== 'absolute') {
+        child.layoutAlign = 'INHERIT';
+        child.layoutGrow = 0;
+      } else {
         child.x = childNode.x - node.x;
         child.y = childNode.y - node.y;
       }
@@ -534,6 +569,7 @@ async function buildNode(node, ctx, target) {
     }
     built.push({ node: childNode, child: child });
   }
+  old.forEach(function (o) { if (used.indexOf(o) === -1 && !o.removed) { o.remove(); ctx.removed++; } });
 
   // Figma only applies shadow spread to frames that clip their content. Polaris uses spread for
   // tight shadows (negative) and for 1px rings in place of borders (checkboxes), so turn clipping
@@ -573,77 +609,126 @@ async function buildNode(node, ctx, target) {
   return frame;
 }
 
-async function buildComponents(data) {
+// "Tone=Auto, Variant=Primary" and "Variant=Primary, Tone=Auto" are the same variant.
+function variantKey(name) {
+  return name.split(',').map(function (p) { return p.trim().toLowerCase().replace(/\s*=\s*/, '='); }).sort().join('|');
+}
+
+async function findComponentsPage(name) {
+  var pages = figma.root.children.filter(function (p) { return p.name === name; });
+  if (pages.length) await pages[0].loadAsync();
+  return { page: pages[0] || null, duplicates: Math.max(0, pages.length - 1) };
+}
+
+function layoutSet(cs) {
+  cs.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+  cs.clipsContent = false;
+  var widest = cs.children.reduce(function (m, c) { return Math.max(m, c.width); }, 0);
+  cs.layoutMode = 'HORIZONTAL';
+  cs.layoutWrap = 'WRAP';
+  cs.itemSpacing = 24;
+  cs.counterAxisSpacing = 24;
+  cs.paddingTop = cs.paddingRight = cs.paddingBottom = cs.paddingLeft = 24;
+  cs.primaryAxisSizingMode = 'FIXED';
+  cs.counterAxisSizingMode = 'AUTO';
+  size(cs, Math.max(1200, widest + 48), cs.height);
+}
+
+async function buildVariant(item, set, ctx, comp) {
+  var root = item.tree;
+  if (root.children.length === 1) {
+    // Wrap the component in a vertical auto layout so it hugs (or stretches to a fixed width).
+    root = Object.assign({}, root, {
+      layout: { direction: 'column', gap: 0, crossGap: 0, padding: [0, 0, 0, 0], justify: 'flex-start', align: set.fixedWidth ? 'stretch' : 'flex-start', wrap: false },
+    });
+  }
+  await buildNode(root, ctx, comp);
+  if (set.fixedWidth && comp.layoutMode !== 'NONE') {
+    comp.counterAxisSizingMode = 'FIXED';
+    size(comp, set.fixedWidth, comp.height);
+    comp.children.forEach(function (c) { if ('layoutAlign' in c) c.layoutAlign = 'STRETCH'; });
+  }
+}
+
+async function buildComponents(data, options) {
   if (!Array.isArray(data.sets)) throw new Error('This does not look like the components export (missing "sets").');
+  options = options || {};
   await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
   var ctx = {
     binder: await makeBinder(data.version),
     available: await figma.listAvailableFontsAsync(),
     fonts: {}, fallbacks: {}, svgFailures: 0, textStyled: 0, absoluteLayouts: 0,
+    reused: 0, created: 0, removed: 0,
   };
 
-  var page = figma.createPage();
-  page.name = data.version + ' components';
-  page.backgrounds = [{ type: 'SOLID', color: { r: 0.945, g: 0.945, b: 0.945 } }];
+  var pageName = data.version + ' components';
+  var found = options.inPlace === false ? { page: null, duplicates: 0 } : await findComponentsPage(pageName);
+  var page = found.page, updating = !!page;
+  if (!page) {
+    page = figma.createPage();
+    page.name = pageName;
+    page.backgrounds = [{ type: 'SOLID', color: { r: 0.945, g: 0.945, b: 0.945 } }];
+  }
   await figma.setCurrentPageAsync(page);
 
-  var y = 0, variants = 0, sets = 0, emptyVariants = 0;
+  var y = page.children.reduce(function (m, n) { return Math.max(m, n.y + n.height + 120); }, 0);
+  var variants = 0, sets = 0, emptyVariants = 0, updatedVariants = 0, addedVariants = 0, newSets = 0, stale = [];
   for (var s = 0; s < data.sets.length; s++) {
     var set = data.sets[s];
     if (!set.items.length) continue;
-    figma.ui.postMessage({ type: 'progress', text: 'Building ' + set.name + ' (' + (s + 1) + ' of ' + data.sets.length + ')…' });
-    var comps = [];
+    figma.ui.postMessage({ type: 'progress', text: (updating ? 'Updating ' : 'Building ') + set.name + ' (' + (s + 1) + ' of ' + data.sets.length + ')…' });
+    var existing = updating ? page.children.filter(function (n) { return n.type === 'COMPONENT_SET' && n.name === set.name; })[0] : null;
+    var byKey = {};
+    if (existing) existing.children.forEach(function (c) { byKey[variantKey(c.name)] = c; });
+    var comps = [], seen = {};
     for (var i = 0; i < set.items.length; i++) {
       var item = set.items[i];
-      var comp = figma.createComponent();
-      var root = item.tree;
-      if (!root.children.length) emptyVariants++;
-      if (root.children.length === 1) {
-        // Wrap the component in a vertical auto layout so it hugs (or stretches to a fixed width).
-        root = Object.assign({}, root, {
-          layout: { direction: 'column', gap: 0, crossGap: 0, padding: [0, 0, 0, 0], justify: 'flex-start', align: set.fixedWidth ? 'stretch' : 'flex-start', wrap: false },
-        });
+      if (!item.tree.children.length) emptyVariants++;
+      var key = variantKey(item.variant);
+      seen[key] = true;
+      var comp = byKey[key];
+      if (comp) {
+        updatedVariants++;
+      } else {
+        comp = figma.createComponent();
+        if (existing) addedVariants++;
       }
-      await buildNode(root, ctx, comp);
+      await buildVariant(item, set, ctx, comp);
       comp.name = item.variant;
-      if (set.fixedWidth) {
-        comp.counterAxisSizingMode = 'FIXED';
-        size(comp, set.fixedWidth, comp.height);
-        comp.children.forEach(function (c) { if ('layoutAlign' in c) c.layoutAlign = 'STRETCH'; });
-      }
-      page.appendChild(comp);
-      comps.push(comp);
+      if (existing && !byKey[key]) existing.appendChild(comp);
+      if (!existing) { page.appendChild(comp); comps.push(comp); }
       variants++;
     }
-    var cs = figma.combineAsVariants(comps, page);
-    cs.name = set.name;
-    cs.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-    cs.clipsContent = false;
-    var widest = comps.reduce(function (m, c) { return Math.max(m, c.width); }, 0);
-    cs.layoutMode = 'HORIZONTAL';
-    cs.layoutWrap = 'WRAP';
-    cs.itemSpacing = 24;
-    cs.counterAxisSpacing = 24;
-    cs.paddingTop = cs.paddingRight = cs.paddingBottom = cs.paddingLeft = 24;
-    cs.primaryAxisSizingMode = 'FIXED';
-    cs.counterAxisSizingMode = 'AUTO';
-    size(cs, Math.max(1200, widest + 48), cs.height);
-    cs.x = 0;
-    cs.y = y;
-    y += cs.height + 120;
+    var cs = existing;
+    if (!cs) {
+      cs = figma.combineAsVariants(comps, page);
+      cs.name = set.name;
+      cs.x = 0;
+      cs.y = y;
+      newSets++;
+    } else {
+      existing.children.forEach(function (c) { if (!seen[variantKey(c.name)]) stale.push(set.name + ' / ' + c.name); });
+    }
+    layoutSet(cs);
+    if (!existing) y += cs.height + 120;
     sets++;
   }
   figma.viewport.scrollAndZoomIntoView(page.children);
 
   var report = [
-    'Built ' + sets + ' component sets (' + variants + ' variants) on page "' + page.name + '".',
+    updating
+      ? 'Updated page "' + page.name + '" in place: ' + updatedVariants + ' variants updated, ' + addedVariants + ' variants added, ' + newSets + ' new sets. Republish the library to roll this out.'
+      : 'Built ' + sets + ' component sets (' + variants + ' variants) on new page "' + page.name + '".',
+    updating ? 'Layers: ' + ctx.reused + ' reused (instance overrides kept), ' + ctx.created + ' created, ' + ctx.removed + ' removed.' : null,
     'Export: ' + (data.exportVersion ? 'v' + data.exportVersion : 'OLD FORMAT — re-export from the latest capture page') + ', captured ' + (data.capturedAt || '?') + '.',
     ctx.binder.hasVariables
       ? 'Colors: ' + ctx.binder.bound + ' bound to Polaris variables, ' + ctx.binder.raw + ' left as raw values (no variable with that value and a fitting name).'
       : 'No "Polaris" variable collection found, so colors are raw values. Import the foundations first to bind them.',
     'Text layers using your text styles: ' + ctx.textStyled + '.',
     'Containers kept as fixed positions (uneven spacing auto layout cannot express): ' + ctx.absoluteLayouts + '.',
-  ];
+  ].filter(function (l) { return l !== null; });
+  if (found.duplicates) report.unshift('Note: ' + (found.duplicates + 1) + ' pages are named "' + pageName + '"; the first one was updated. Delete the others to avoid confusion.', '');
+  if (stale.length) report.push('Not in this export, left untouched (instances may use them; delete by hand if unused): ' + stale.slice(0, 10).join('; ') + (stale.length > 10 ? ' … and ' + (stale.length - 10) + ' more' : '') + '.');
   Object.keys(ctx.fallbacks).forEach(function (f) { report.push('Font fallback: ' + f + '.'); });
   if (emptyVariants) report.unshift('WARNING: ' + emptyVariants + ' of ' + variants + ' variants were empty in the export, so their components are empty. Re-export from the latest capture page.', '');
   if (ctx.svgFailures) report.push(ctx.svgFailures + ' icons could not be imported and are grey placeholders.');

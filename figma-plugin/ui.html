@@ -17,6 +17,7 @@
 <textarea id="json" placeholder='{"colors": [...], "text": [...]}'></textarea>
 <label><input type="checkbox" id="tokens" checked> Foundations: import raw color tokens (if any were found)</label>
 <label><input type="checkbox" id="specimen" checked> Foundations: draw a specimen frame on this page</label>
+<label><input type="checkbox" id="inplace" checked> Components: update the existing components page in place (keeps instances linked and their overrides)</label>
 <button id="go">Import</button>
 <div id="status"></div>
 <script>
@@ -53,6 +54,7 @@
         options: {
           tokens: document.getElementById('tokens').checked,
           specimen: document.getElementById('specimen').checked,
+          inPlace: document.getElementById('inplace').checked,
         },
       } }, '*');
     };

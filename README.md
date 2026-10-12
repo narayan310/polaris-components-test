@@ -56,7 +56,20 @@ The plugin creates a new page with 24 component sets (169 variants):
 - Colors are **bound to the Polaris variables** when the value matches exactly, and text uses your **text styles** when the spec matches. The report gives the counts.
 - Icons come in as vectors. Images (avatars, thumbnails) are grey placeholders.
 
-Re-running creates a fresh page, so the earlier result stays intact for comparison.
+**Re-importing updates the library in place.** With *update the existing components page in place* ticked (the default), the plugin finds the `Polaris 2.0 components` page and updates it rather than building a new one:
+- Component sets are matched by name and variants by their properties, so components keep their identity and instances in other files stay linked.
+- Layers inside each variant are reused where the structure still matches, so instance overrides (a button label changed to "Save") survive the update. Icons are the exception: vectors are rebuilt, so an override on an icon's color resets.
+- New variants and sets are added. Variants missing from the new export are **left untouched** and listed in the report, since instances may use them; delete them by hand once nothing does.
+- Afterwards, **republish** the library; teammates get it as a normal library update to review and accept.
+
+Untick the option to build a separate fresh page instead, e.g. to compare two Polaris versions side by side.
+
+## Publishing the library
+
+1. Move the file into a **team project** (not Drafts), then Assets panel → book icon (**Libraries**) → **Publish**. Requires a paid Figma plan; only editors can publish.
+2. In the publish dialog, untick what shouldn't be shared. Names starting with `.` or `_` are never published, and variables have a *Hide from publishing* option. The hashed `Tokens/…` variables are usually best hidden; publish the `Rendered/…` ones (ideally renamed to your team's vocabulary).
+3. Teammates enable it under Assets → Libraries, or an admin turns it on by default for the team/org.
+4. To update: re-export, re-import (in place), check the report, republish.
 
 Also captured: absolutely positioned `::before`/`::after` layers (borders, bevels, overlays), linear and radial gradient backgrounds (as Figma gradients), multi-layer shadows including spread (frames using spread get **Clip content**, which Figma needs to apply it), and icons drawn as CSS masks. Hidden text (e.g. a loading button's label) is kept, without a fill, so components keep their size. Polaris' `ShopifyInter` font falls back to Inter.
 
