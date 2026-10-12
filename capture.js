@@ -193,6 +193,8 @@
   SETS.forEach(function (s) {
     var wrap = document.createElement('section');
     wrap.className = 'cap-set';
+    wrap.setAttribute('data-set', s.name);
+    if (s.width) wrap.setAttribute('data-width', s.width);
     var h = document.createElement('h2');
     h.textContent = s.name + ' (' + s.items.length + ')';
     wrap.appendChild(h);

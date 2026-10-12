@@ -7,9 +7,10 @@ figma.showUI(__html__, { width: 420, height: 420 });
 figma.ui.onmessage = async function (msg) {
   if (msg.type !== 'import') return;
   try {
-    var report = await importFoundations(msg.data, msg.options || {});
+    var isComponents = msg.data && msg.data.kind === 'polaris-components';
+    var report = isComponents ? await buildComponents(msg.data) : await importFoundations(msg.data, msg.options || {});
     figma.ui.postMessage({ type: 'done', report: report });
-    figma.notify('Polaris foundations imported');
+    figma.notify(isComponents ? 'Polaris components built' : 'Polaris foundations imported');
   } catch (e) {
     figma.ui.postMessage({ type: 'error', message: 'Import failed: ' + (e && e.message ? e.message : String(e)) });
   }
@@ -275,5 +276,287 @@ async function importFoundations(data, options) {
     ], text.styles);
     report.push('', 'Specimen frame added to this page.');
   }
+  return report;
+}
+
+// ---------- components ----------
+// Rebuilds the capture sheet export (components-export.js) as native components: flex containers become
+// auto layout, colors bind to the "Polaris" variables and text to the version's text styles when the
+// values match exactly, and each set's variants are combined into a component set.
+
+function colorKey(c) {
+  function h(v) { return Math.round(v * 255).toString(16).padStart(2, '0'); }
+  return h(c.r) + h(c.g) + h(c.b) + ':' + Math.round((c.a == null ? 1 : c.a) * 100);
+}
+
+async function makeBinder(version) {
+  var colors = {}, styles = {};
+  var collections = await figma.variables.getLocalVariableCollectionsAsync();
+  var collection = collections.filter(function (c) { return c.name === COLLECTION_NAME; })[0];
+  if (collection) {
+    var mode = collection.modes.filter(function (m) { return m.name === version; })[0] || collection.modes[0];
+    var vars = await figma.variables.getLocalVariablesAsync('COLOR');
+    vars.forEach(function (v) {
+      if (v.variableCollectionId !== collection.id) return;
+      var val = v.valuesByMode[mode.modeId];
+      if (!val || val.type === 'VARIABLE_ALIAS') return;
+      var key = colorKey(val);
+      // Prefer Polaris' own token names over the sampled "Rendered/" names.
+      if (!colors[key] || (v.name.indexOf('Tokens/') === 0 && colors[key].name.indexOf('Tokens/') !== 0)) colors[key] = v;
+    });
+  }
+  var textStyles = await figma.getLocalTextStylesAsync();
+  textStyles.forEach(function (s) {
+    if (s.name.indexOf(version + '/') !== 0) return;
+    var lh = s.lineHeight.unit === 'PIXELS' ? s.lineHeight.value : 'auto';
+    styles[[s.fontName.family, s.fontName.style, s.fontSize, lh].join('|')] = s;
+  });
+  return { colors: colors, styles: styles, hasVariables: !!collection, bound: 0, raw: 0 };
+}
+
+function paint(c, binder) {
+  var solid = { type: 'SOLID', color: { r: c.r, g: c.g, b: c.b }, opacity: c.a == null ? 1 : c.a };
+  var v = binder.colors[colorKey(c)];
+  if (v) {
+    binder.bound++;
+    return figma.variables.setBoundVariableForPaint({ type: 'SOLID', color: solid.color }, 'color', v);
+  }
+  binder.raw++;
+  return solid;
+}
+
+var JUSTIFY = { 'flex-start': 'MIN', start: 'MIN', left: 'MIN', normal: 'MIN', center: 'CENTER', 'flex-end': 'MAX', end: 'MAX', right: 'MAX', 'space-between': 'SPACE_BETWEEN' };
+var ALIGN = { 'flex-start': 'MIN', start: 'MIN', 'self-start': 'MIN', normal: 'MIN', stretch: 'MIN', center: 'CENTER', 'flex-end': 'MAX', end: 'MAX', 'self-end': 'MAX', baseline: 'BASELINE' };
+
+function size(n, w, h) { n.resize(Math.max(w, 0.01), Math.max(h, 0.01)); }
+
+function applyBox(frame, node, binder) {
+  frame.name = node.name;
+  frame.fills = node.fill ? [paint(node.fill, binder)] : [];
+  if (node.stroke) {
+    frame.strokes = [paint(node.stroke.color, binder)];
+    frame.strokeAlign = 'INSIDE';
+    frame.strokeTopWeight = node.stroke.widths[0];
+    frame.strokeRightWeight = node.stroke.widths[1];
+    frame.strokeBottomWeight = node.stroke.widths[2];
+    frame.strokeLeftWeight = node.stroke.widths[3];
+  } else {
+    frame.strokes = [];
+  }
+  var r = node.radius || [0, 0, 0, 0];
+  frame.topLeftRadius = r[0] || 0;
+  frame.topRightRadius = r[1] || 0;
+  frame.bottomRightRadius = r[2] || 0;
+  frame.bottomLeftRadius = r[3] || 0;
+  frame.effects = (node.effects || []).map(function (e) {
+    return { type: e.inset ? 'INNER_SHADOW' : 'DROP_SHADOW', color: e.color, offset: { x: e.x, y: e.y }, radius: e.blur, spread: e.spread, visible: true, blendMode: 'NORMAL' };
+  });
+  if (node.opacity != null && node.opacity < 1) frame.opacity = node.opacity;
+  frame.clipsContent = !!node.clip;
+}
+
+async function buildText(node, ctx) {
+  var t = figma.createText();
+  var key = node.fontFamily + '|' + node.fontWeight + '|' + node.italic;
+  var font = ctx.fonts[key];
+  if (font === undefined) {
+    var pick = pickFont(node.fontFamily, node.fontWeight, ctx.available);
+    font = pick ? pick.fontName : null;
+    if (font && node.italic) {
+      var italic = ctx.available.filter(function (f) { return f.fontName.family === font.family && /italic/i.test(f.fontName.style) && styleWeight(f.fontName.style) === styleWeight(font.style); })[0];
+      if (italic) font = italic.fontName;
+    }
+    if (font) await figma.loadFontAsync(font);
+    if (pick && pick.fallback) ctx.fallbacks[node.fontFamily.split(',')[0].trim() + ' → ' + font.family] = 1;
+    ctx.fonts[key] = font;
+  }
+  if (font) t.fontName = font;
+  t.characters = node.characters;
+  t.name = node.name || node.characters.slice(0, 24);
+  var style = font && ctx.binder.styles[[font.family, font.style, node.fontSize, node.lineHeight].join('|')];
+  if (style) {
+    await t.setTextStyleIdAsync(style.id);
+    ctx.textStyled++;
+  } else {
+    t.fontSize = node.fontSize;
+    t.lineHeight = { unit: 'PIXELS', value: node.lineHeight };
+    t.letterSpacing = { unit: 'PIXELS', value: node.letterSpacing || 0 };
+  }
+  if (node.color) t.fills = [paint(node.color, ctx.binder)];
+  if (node.underline) t.textDecoration = 'UNDERLINE';
+  t.textAlignHorizontal = node.align === 'center' ? 'CENTER' : node.align === 'right' || node.align === 'end' ? 'RIGHT' : 'LEFT';
+  if (node.wrap) {
+    t.textAutoResize = 'HEIGHT';
+    size(t, node.w, node.h);
+  } else {
+    t.textAutoResize = 'WIDTH_AND_HEIGHT';
+  }
+  return t;
+}
+
+function buildSvg(node, ctx) {
+  try {
+    var f = figma.createNodeFromSvg(node.svg);
+    f.name = node.name === 'svg' ? 'Icon' : node.name;
+    size(f, node.w, node.h);
+    return f;
+  } catch (e) {
+    ctx.svgFailures++;
+    var r = figma.createRectangle();
+    r.name = 'Icon (could not import SVG)';
+    size(r, node.w, node.h);
+    r.fills = [{ type: 'SOLID', color: { r: 0.8, g: 0.8, b: 0.8 } }];
+    return r;
+  }
+}
+
+async function buildNode(node, ctx, target) {
+  if (node.type === 'text') return buildText(node, ctx);
+  if (node.type === 'svg') return buildSvg(node, ctx);
+  if (node.type === 'image') {
+    var img = figma.createRectangle();
+    img.name = 'Image';
+    size(img, node.w, node.h);
+    img.cornerRadius = (node.radius && node.radius[0]) || 0;
+    img.fills = [{ type: 'SOLID', color: { r: 0.85, g: 0.85, b: 0.85 } }];
+    return img;
+  }
+
+  var frame = target || figma.createFrame();
+  applyBox(frame, node, ctx.binder);
+  size(frame, node.w, node.h);
+  var L = node.layout;
+  if (L) {
+    frame.layoutMode = L.direction === 'row' ? 'HORIZONTAL' : 'VERTICAL';
+    frame.itemSpacing = L.gap;
+    frame.paddingTop = L.padding[0];
+    frame.paddingRight = L.padding[1];
+    frame.paddingBottom = L.padding[2];
+    frame.paddingLeft = L.padding[3];
+    frame.primaryAxisAlignItems = JUSTIFY[L.justify] || 'MIN';
+    var align = ALIGN[L.align] || 'MIN';
+    frame.counterAxisAlignItems = align === 'BASELINE' && frame.layoutMode !== 'HORIZONTAL' ? 'MIN' : align;
+    if (L.wrap && frame.layoutMode === 'HORIZONTAL') {
+      frame.layoutWrap = 'WRAP';
+      frame.counterAxisSpacing = L.crossGap;
+    }
+    frame.primaryAxisSizingMode = 'FIXED';
+    frame.counterAxisSizingMode = 'FIXED';
+  }
+
+  var built = [];
+  for (var i = 0; i < node.children.length; i++) {
+    var childNode = node.children[i];
+    var child = await buildNode(childNode, ctx);
+    frame.appendChild(child);
+    if (L) {
+      if (childNode.position === 'absolute') {
+        child.layoutPositioning = 'ABSOLUTE';
+        child.x = childNode.x - node.x;
+        child.y = childNode.y - node.y;
+      }
+    } else {
+      child.x = childNode.x - node.x;
+      child.y = childNode.y - node.y;
+    }
+    built.push({ node: childNode, child: child });
+  }
+
+  if (L) {
+    var horizontal = frame.layoutMode === 'HORIZONTAL';
+    // In columns, children that span the full inner width become "fill" so the component resizes
+    // properly; that needs a fixed width on this frame. Everything else hugs where hugging
+    // reproduces the measured size, and keeps the measured size where it does not.
+    var innerWidth = node.w - L.padding[1] - L.padding[3];
+    var stretchers = horizontal ? [] : built.filter(function (b) {
+      return b.node.position !== 'absolute' && (L.align === 'stretch' || L.align === 'normal') &&
+        /auto|stretch|normal/.test(b.node.alignSelf || 'auto') && Math.abs(b.node.w - innerWidth) <= 1.5;
+    });
+    frame.primaryAxisSizingMode = 'AUTO';
+    frame.counterAxisSizingMode = stretchers.length ? 'FIXED' : 'AUTO';
+    var primaryOk = Math.abs((horizontal ? frame.width : frame.height) - (horizontal ? node.w : node.h)) <= 1.5;
+    var counterOk = stretchers.length || Math.abs((horizontal ? frame.height : frame.width) - (horizontal ? node.h : node.w)) <= 1.5;
+    if (!primaryOk) frame.primaryAxisSizingMode = 'FIXED';
+    if (!counterOk) frame.counterAxisSizingMode = 'FIXED';
+    if (frame.primaryAxisSizingMode === 'FIXED' || frame.counterAxisSizingMode === 'FIXED') {
+      size(frame,
+        horizontal ? (primaryOk ? frame.width : node.w) : (stretchers.length || !counterOk ? node.w : frame.width),
+        horizontal ? (counterOk ? frame.height : node.h) : (primaryOk ? frame.height : node.h));
+    }
+    stretchers.forEach(function (b) { b.child.layoutAlign = 'STRETCH'; });
+    if (frame.primaryAxisSizingMode === 'FIXED') {
+      built.forEach(function (b) { if (b.node.position !== 'absolute' && b.node.grow > 0) b.child.layoutGrow = 1; });
+    }
+  }
+  return frame;
+}
+
+async function buildComponents(data) {
+  if (!Array.isArray(data.sets)) throw new Error('This does not look like the components export (missing "sets").');
+  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+  var ctx = {
+    binder: await makeBinder(data.version),
+    available: await figma.listAvailableFontsAsync(),
+    fonts: {}, fallbacks: {}, svgFailures: 0, textStyled: 0,
+  };
+
+  var page = figma.createPage();
+  page.name = data.version + ' components';
+  await figma.setCurrentPageAsync(page);
+
+  var y = 0, variants = 0, sets = 0;
+  for (var s = 0; s < data.sets.length; s++) {
+    var set = data.sets[s];
+    if (!set.items.length) continue;
+    var comps = [];
+    for (var i = 0; i < set.items.length; i++) {
+      var item = set.items[i];
+      var comp = figma.createComponent();
+      var root = item.tree;
+      if (root.children.length === 1) {
+        // Wrap the component in a vertical auto layout so it hugs (or stretches to a fixed width).
+        root = Object.assign({}, root, {
+          layout: { direction: 'column', gap: 0, crossGap: 0, padding: [0, 0, 0, 0], justify: 'flex-start', align: set.fixedWidth ? 'stretch' : 'flex-start', wrap: false },
+        });
+      }
+      await buildNode(root, ctx, comp);
+      comp.name = item.variant;
+      if (set.fixedWidth) {
+        comp.counterAxisSizingMode = 'FIXED';
+        size(comp, set.fixedWidth, comp.height);
+        comp.children.forEach(function (c) { if ('layoutAlign' in c) c.layoutAlign = 'STRETCH'; });
+      }
+      page.appendChild(comp);
+      comps.push(comp);
+      variants++;
+    }
+    var cs = figma.combineAsVariants(comps, page);
+    cs.name = set.name;
+    var widest = comps.reduce(function (m, c) { return Math.max(m, c.width); }, 0);
+    cs.layoutMode = 'HORIZONTAL';
+    cs.layoutWrap = 'WRAP';
+    cs.itemSpacing = 24;
+    cs.counterAxisSpacing = 24;
+    cs.paddingTop = cs.paddingRight = cs.paddingBottom = cs.paddingLeft = 24;
+    cs.primaryAxisSizingMode = 'FIXED';
+    cs.counterAxisSizingMode = 'AUTO';
+    size(cs, Math.max(1200, widest + 48), cs.height);
+    cs.x = 0;
+    cs.y = y;
+    y += cs.height + 120;
+    sets++;
+  }
+  figma.viewport.scrollAndZoomIntoView(page.children);
+
+  var report = [
+    'Built ' + sets + ' component sets (' + variants + ' variants) on page "' + page.name + '".',
+    ctx.binder.hasVariables
+      ? 'Colors: ' + ctx.binder.bound + ' bound to Polaris variables, ' + ctx.binder.raw + ' left as raw values (no exact variable match).'
+      : 'No "Polaris" variable collection found, so colors are raw values. Import the foundations first to bind them.',
+    'Text layers using your text styles: ' + ctx.textStyled + '.',
+  ];
+  Object.keys(ctx.fallbacks).forEach(function (f) { report.push('Font fallback: ' + f + '.'); });
+  if (ctx.svgFailures) report.push(ctx.svgFailures + ' icons could not be imported and are grey placeholders.');
+  report.push('Images (avatars, thumbnails) are grey placeholders; drop real images in as fills.');
   return report;
 }

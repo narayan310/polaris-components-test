@@ -4,8 +4,9 @@ Static specimen pages for Shopify **Polaris 2.0** web components (App Home / `s-
 
 - `index.html` — foundations (fonts, type hierarchy, colors) followed by every component, with its variants, tones and states
 - `foundations.js` — measures the foundations from the rendered components, so they always match the loaded Polaris version
-- `capture.html` — one frame per component variant (169 frames), captioned in Figma's `Property=Value` variant format
-- `figma-plugin/` — a local Figma plugin that turns the exported foundations into color variables and text styles
+- `capture.html` — one frame per component variant (169 frames), captioned in Figma's `Property=Value` variant format, with a components export
+- `components-export.js` — serialises the rendered variants (layout, boxes, text, icons) for the Figma plugin
+- `figma-plugin/` — a local Figma plugin that turns the exports into color variables, text styles and native component sets
 - `patterns.html` — composed patterns: metrics card, setup guide, callout, empty state, index table, resource list, settings
 
 Components load from Shopify's CDN, so you need an internet connection. There is no build step.
@@ -44,14 +45,22 @@ You get:
 
 Re-running updates in place. To add the old design as a second **mode**, open `index.html?polaris=1`, export again and import. Text styles have no modes, so they go into a separate `Polaris 1/…` folder. Free Figma plans allow only one mode per collection; the plugin then reports that it wrote into the existing mode.
 
-### 2. Components → capture sheet
+### 2. Components → native component sets
 
-1. Install the **html.to.design** Figma plugin and its Chrome extension.
-2. Open `capture.html` and capture it (or one set at a time) with the extension.
-3. For each set: rename every captured frame to its caption (e.g. `Variant=Primary, Tone=Critical, State=Disabled`), make each a component, select them all and choose **Combine as variants**. Name the set (e.g. `Button`). Figma creates the properties from the names.
-4. Replace raw colors with the `Polaris` variables and raw text with the text styles, and add auto layout where the import used fixed positions.
+1. Open `capture.html`, wait for **Export components JSON** to become active, and click it. You get `polaris-components-polaris-2-0.json`.
+2. In your library file (with the foundations already imported), run **Polaris Foundations Import**, choose that file and press **Import**. The plugin detects which kind of file it is.
 
-Overlays (modal, popover, menu, tooltip) only render while open, so capture them from `index.html`.
+The plugin creates a new page with 24 component sets (169 variants):
+- Variant properties come from the captions (`Variant=Primary, Tone=Critical, State=Disabled`).
+- Flex containers become **auto layout**: buttons and badges hug their label, and fixed-width components (fields, banners, sections) fill their width.
+- Colors are **bound to the Polaris variables** when the value matches exactly, and text uses your **text styles** when the spec matches. The report gives the counts.
+- Icons come in as vectors. Images (avatars, thumbnails) are grey placeholders.
+
+Re-running creates a fresh page, so the earlier result stays intact for comparison.
+
+Not covered: overlays (modal, popover, menu, tooltip), which only render while open, and anything Polaris draws with CSS pseudo-elements or background images.
+
+Alternative: capture `capture.html` with the **html.to.design** plugin, then name each frame with its caption, make it a component and **Combine as variants**.
 
 ### 3. Patterns
 

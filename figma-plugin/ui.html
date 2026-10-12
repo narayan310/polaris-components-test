@@ -8,11 +8,15 @@
   #status { margin-top: 10px; white-space: pre-wrap; }
   .error { color: #c4302b; }
 </style>
-<p>Choose the file from <b>Export to Figma → Download JSON</b> on the Polaris components site, or paste the copied JSON below.</p>
+<p>Choose an exported file, or paste its JSON below:</p>
+<ul style="margin:0 0 8px;padding-left:18px">
+  <li><b>Foundations</b> (components page → Export to Figma) → variables and text styles. Import these first.</li>
+  <li><b>Components</b> (capture page → Export components JSON) → component sets on a new page.</li>
+</ul>
 <input type="file" id="file" accept=".json,application/json">
 <textarea id="json" placeholder='{"colors": [...], "text": [...]}'></textarea>
-<label><input type="checkbox" id="tokens" checked> Import raw color tokens (if any were found)</label>
-<label><input type="checkbox" id="specimen" checked> Draw a specimen frame on this page</label>
+<label><input type="checkbox" id="tokens" checked> Foundations: import raw color tokens (if any were found)</label>
+<label><input type="checkbox" id="specimen" checked> Foundations: draw a specimen frame on this page</label>
 <button id="go">Import</button>
 <div id="status"></div>
 <script>

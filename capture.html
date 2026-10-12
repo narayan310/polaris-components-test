@@ -25,6 +25,9 @@
     /* The frame is what you capture: no padding, border or fill, so it hugs the component. */
     .cap-frame { display: inline-block; }
     .cap-frame.fixed { display: block; }
+    #cap-export { font: 600 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 8px; border: 0; background: #303030; color: #fff; cursor: pointer; }
+    #cap-export:disabled { opacity: .4; cursor: default; }
+    #cap-export-status { margin-left: 8px; color: #616161; }
   </style>
 </head>
 <body>
@@ -32,9 +35,15 @@
     <h1>Polaris capture sheet</h1>
     <p>One frame per variant. Each caption is already in Figma's variant format (<code>Property=Value, Property=Value</code>): name the captured frame with it, make it a component, then select all frames in a set and choose <b>Combine as variants</b>. Figma reads the properties from the names.</p>
     <p>Overlays (modal, popover, menu, tooltip) only render when open, so capture those from the components page.</p>
+    <p><b>To build native Figma components:</b> export this sheet and load the file in the Polaris Foundations plugin. Import the foundations first so the components can use your variables and text styles.</p>
+    <p>
+      <button id="cap-export" disabled>Export components JSON</button>
+      <span id="cap-export-status">Waiting for Polaris…</span>
+    </p>
     <p><a href="index.html">← Components page</a></p>
   </div>
   <div id="cap"></div>
   <script src="capture.js"></script>
+  <script src="components-export.js"></script>
 </body>
 </html>
