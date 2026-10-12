@@ -563,6 +563,7 @@ async function buildComponents(data) {
 
   var report = [
     'Built ' + sets + ' component sets (' + variants + ' variants) on page "' + page.name + '".',
+    'Export: ' + (data.exportVersion ? 'v' + data.exportVersion : 'OLD FORMAT — re-export from the latest capture page') + ', captured ' + (data.capturedAt || '?') + '.',
     ctx.binder.hasVariables
       ? 'Colors: ' + ctx.binder.bound + ' bound to Polaris variables, ' + ctx.binder.raw + ' left as raw values (no exact variable match).'
       : 'No "Polaris" variable collection found, so colors are raw values. Import the foundations first to bind them.',
@@ -572,5 +573,72 @@ async function buildComponents(data) {
   if (emptyVariants) report.unshift('WARNING: ' + emptyVariants + ' of ' + variants + ' variants were empty in the export, so their components are empty. Re-export from the latest capture page.', '');
   if (ctx.svgFailures) report.push(ctx.svgFailures + ' icons could not be imported and are grey placeholders.');
   report.push('Images (avatars, thumbnails) are grey placeholders; drop real images in as fills.');
+  report.push('', '--- Diagnostics (copy everything below to Claude) ---');
+  report = report.concat(await diagnose(page));
   return report;
+}
+
+// ---------- diagnostics ----------
+// Describes what Figma actually built, so problems can be diagnosed from the report alone.
+
+function hex2(n) { return Math.round(n * 255).toString(16).padStart(2, '0'); }
+
+async function describePaints(paints) {
+  if (!paints || paints === figma.mixed || !paints.length) return 'none';
+  var out = [];
+  for (var i = 0; i < paints.length; i++) {
+    var p = paints[i];
+    if (p.type !== 'SOLID') { out.push(p.type); continue; }
+    var c = p.color, a = p.opacity == null ? 1 : p.opacity, via = '';
+    if (p.boundVariables && p.boundVariables.color) {
+      var v = await figma.variables.getVariableByIdAsync(p.boundVariables.color.id);
+      if (v) {
+        var coll = await figma.variables.getVariableCollectionByIdAsync(v.variableCollectionId);
+        var val = v.valuesByMode[coll.defaultModeId];
+        via = ' var:' + v.name;
+        if (val && val.r != null) { c = val; a = val.a == null ? 1 : val.a; }
+        else via += '(no value in default mode)';
+      }
+    }
+    out.push('#' + hex2(c.r) + hex2(c.g) + hex2(c.b) + (a < 1 ? '@' + Math.round(a * 100) + '%' : '') + (p.visible === false ? '(hidden)' : '') + via);
+  }
+  return out.join(' + ');
+}
+
+async function diagnose(page) {
+  var lines = [];
+  var sets = page.children.filter(function (n) { return n.type === 'COMPONENT_SET'; });
+  var outside = 0, hidden = 0, transparent = 0, zero = 0, total = 0;
+  sets.forEach(function (set) {
+    set.children.forEach(function (comp) {
+      var cb = comp.absoluteBoundingBox;
+      comp.findAll(function () { return true; }).forEach(function (n) {
+        total++;
+        var b = n.absoluteBoundingBox;
+        if (b && cb && (b.x < cb.x - 1 || b.y < cb.y - 1 || b.x + b.width > cb.x + cb.width + 1 || b.y + b.height > cb.y + cb.height + 1)) outside++;
+        if (n.visible === false || n.opacity === 0) hidden++;
+        if (n.width < 0.5 || n.height < 0.5) zero++;
+        if (n.fills && n.fills !== figma.mixed && n.fills.length && n.fills.every(function (p) { return p.opacity === 0 || p.visible === false; })) transparent++;
+      });
+    });
+  });
+  lines.push('Layers inside components: ' + total + '; outside their component: ' + outside + '; hidden/opacity 0: ' + hidden + '; transparent fills: ' + transparent + '; zero-size: ' + zero + '.');
+  var first = sets[0] && sets[0].children[0];
+  if (first) {
+    lines.push('First variant "' + first.name + '" (' + Math.round(first.width) + 'x' + Math.round(first.height) + '):');
+    var queue = [{ n: first, d: 0 }], shown = 0;
+    while (queue.length && shown < 25) {
+      var item = queue.shift(), n = item.n;
+      var bits = [Array(item.d + 1).join('  ') + n.type + ' "' + n.name + '"', 'x' + Math.round(n.x) + ' y' + Math.round(n.y), Math.round(n.width) + 'x' + Math.round(n.height)];
+      if (n.layoutMode && n.layoutMode !== 'NONE') bits.push(n.layoutMode + ' ' + n.primaryAxisSizingMode + '/' + n.counterAxisSizingMode);
+      if (n.visible === false) bits.push('HIDDEN');
+      if (n.opacity < 1) bits.push('opacity ' + n.opacity);
+      if ('fills' in n) bits.push('fill ' + await describePaints(n.fills));
+      if (n.type === 'TEXT') bits.push('"' + n.characters + '" ' + (n.fontName !== figma.mixed ? n.fontName.family + ' ' + n.fontName.style : 'mixed') + ' ' + String(n.fontSize));
+      lines.push(bits.join(' · '));
+      shown++;
+      if ('children' in n) n.children.forEach(function (ch) { queue.splice(queue.length, 0, { n: ch, d: item.d + 1 }); });
+    }
+  }
+  return lines;
 }

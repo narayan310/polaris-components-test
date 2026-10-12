@@ -383,6 +383,7 @@
     var file = script ? script.src.split('/').pop() : 'unknown';
     var out = {
       kind: 'polaris-components',
+      exportVersion: 3,
       source: file,
       version: /polaris-1/.test(file) ? 'Polaris 1' : /polaris-2/.test(file) ? 'Polaris 2.0' : file,
       capturedAt: new Date().toISOString(),
