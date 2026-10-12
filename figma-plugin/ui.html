@@ -1,0 +1,51 @@
+<style>
+  body { font: 12px/1.4 Inter, system-ui, sans-serif; margin: 12px; color: #1e1e1e; }
+  textarea { width: 100%; height: 150px; box-sizing: border-box; font: 11px/1.4 ui-monospace, Menlo, monospace; }
+  label { display: block; margin: 8px 0; }
+  button { margin-top: 4px; padding: 6px 12px; background: #0d99ff; color: #fff; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { margin-top: 10px; white-space: pre-wrap; }
+  .error { color: #c4302b; }
+</style>
+<p>Paste the JSON from <b>Export to Figma → Copy foundations JSON</b> on the Polaris components site.</p>
+<textarea id="json" placeholder='{"colors": [...], "text": [...]}'></textarea>
+<label><input type="checkbox" id="tokens" checked> Import raw color tokens (if any were found)</label>
+<label><input type="checkbox" id="specimen" checked> Draw a specimen frame on this page</label>
+<button id="go">Import</button>
+<div id="status"></div>
+<script>
+  var go = document.getElementById('go');
+  var status = document.getElementById('status');
+  go.onclick = function () {
+    var data;
+    try {
+      data = JSON.parse(document.getElementById('json').value);
+    } catch (e) {
+      status.className = 'error';
+      status.textContent = 'That is not valid JSON: ' + e.message;
+      return;
+    }
+    go.disabled = true;
+    status.className = '';
+    status.textContent = 'Importing…';
+    parent.postMessage({ pluginMessage: {
+      type: 'import',
+      data: data,
+      options: {
+        tokens: document.getElementById('tokens').checked,
+        specimen: document.getElementById('specimen').checked,
+      },
+    } }, '*');
+  };
+  onmessage = function (e) {
+    var msg = e.data.pluginMessage;
+    go.disabled = false;
+    if (msg.type === 'error') {
+      status.className = 'error';
+      status.textContent = msg.message;
+    } else {
+      status.className = '';
+      status.textContent = msg.report.join('\n');
+    }
+  };
+</script>

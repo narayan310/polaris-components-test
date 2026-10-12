@@ -40,6 +40,16 @@
   <!-- ============ FOUNDATIONS ============ -->
   <!-- Values are measured from the rendered components at runtime (foundations.js), so they
        always reflect whichever Polaris version is loaded. -->
+  <s-section heading="Export to Figma">
+    <p class="fd-note">Exports the measured fonts, type hierarchy and colors below as JSON for the Polaris Foundations Figma plugin (see <code>figma-plugin/</code>). Load the page with <code>?polaris=1</code> to export Polaris 1 into a second mode.</p>
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-button id="fd-copy" variant="primary" disabled>Copy foundations JSON</s-button>
+      <s-button id="fd-download" disabled>Download JSON</s-button>
+      <s-button href="capture.html" variant="tertiary">Open capture page</s-button>
+    </s-stack>
+    <p class="fd-note" id="fd-export-status" style="margin-top:8px">Measuring…</p>
+  </s-section>
+
   <s-section heading="Typography — fonts">
     <p class="fd-note">Font faces registered on the page by Polaris, read from <code>document.fonts</code>.</p>
     <div id="fd-fonts"><p class="fd-note">Measuring…</p></div>

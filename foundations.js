@@ -4,6 +4,25 @@
 (function () {
   'use strict';
 
+  // Everything measured, in a shape the Figma plugin (figma-plugin/) can import.
+  var EXPORT = { colors: [], tokens: [], text: [], fonts: [] };
+
+  var TYPE_NAMES = {
+    'page-title': 'Heading/Page title',
+    'section-heading': 'Heading/Section',
+    'subsection-heading': 'Heading/Sub-section',
+    'heading': 'Heading/Heading',
+    'paragraph': 'Body/Paragraph',
+    'paragraph-subdued': 'Body/Paragraph subdued',
+    'text': 'Body/Text',
+    'text-strong': 'Body/Text strong',
+    'text-subdued': 'Body/Text subdued',
+    'link': 'Body/Link',
+    'button': 'Label/Button',
+    'badge': 'Label/Badge',
+    'field-label': 'Label/Field',
+  };
+
   // ---------- helpers ----------
 
   // Every element under a node, descending into open shadow roots.
@@ -53,6 +72,17 @@
   function hex(c) {
     var h = '#' + [c.r, c.g, c.b].map(function (n) { return n.toString(16).padStart(2, '0'); }).join('').toUpperCase();
     return c.a < 1 ? h + ' · ' + Math.round(c.a * 100) + '%' : h;
+  }
+
+  function hex6(c) {
+    return '#' + [c.r, c.g, c.b].map(function (n) { return n.toString(16).padStart(2, '0'); }).join('').toUpperCase();
+  }
+
+  // "Badge · success · label" in group "Badges" -> "Badges/success/label"
+  function figmaColorName(group, name) {
+    var parts = name.split(' · ');
+    if (parts.length > 1 && group.toLowerCase().indexOf(parts[0].toLowerCase()) === 0) parts.shift();
+    return group + '/' + parts.join('/');
   }
 
   function luminance(c) {
@@ -175,6 +205,7 @@
       if (seen[key]) return;
       seen[key] = true;
       rows.push(f);
+      EXPORT.fonts.push({ family: f.family.replace(/"/g, ''), weight: f.weight, style: f.style, status: f.status });
     });
     if (!rows.length) {
       box.appendChild(note('No web fonts registered — Polaris is using the system font stack shown in the hierarchy below.'));
@@ -224,6 +255,15 @@
         line.appendChild(el('b', null, p[0] + ': '));
         line.appendChild(document.createTextNode(p[1]));
         spec.appendChild(line);
+      });
+      EXPORT.text.push({
+        name: TYPE_NAMES[probe.getAttribute('data-type-probe')] || probe.getAttribute('data-type-probe'),
+        fontFamily: s.fontFamily,
+        fontSize: s.fontSize,
+        lineHeight: s.lineHeight,
+        fontWeight: s.fontWeight,
+        letterSpacing: s.letterSpacing,
+        color: color ? hex6(color) : null,
       });
       spec.title = 'Full stack: ' + s.fontFamily + (target === host ? ' (measured on host — shadow root not readable)' : '');
     });
@@ -321,6 +361,7 @@
           extra = contrast(c, bg).toFixed(2) + ':1 contrast';
         }
         (groups[p.group] = groups[p.group] || []).push(swatch(name, c, extra));
+        EXPORT.colors.push({ name: figmaColorName(p.group, name), hex: hex6(c), alpha: c.a });
       });
     });
     Object.keys(groups).forEach(function (g) {
@@ -347,12 +388,51 @@
     Object.keys(groups).sort().forEach(function (g) {
       box.appendChild(el('div', 'fd-group', g + ' (' + groups[g].length + ')'));
       var grid = el('div', 'fd-swatches');
-      groups[g].forEach(function (p) { grid.appendChild(swatch(p.name, p.c)); });
+      groups[g].forEach(function (p) {
+        grid.appendChild(swatch(p.name, p.c));
+        var rest = p.name.replace(/^--/, '').split('-');
+        if (rest[0].length <= 2) rest.shift();
+        if (rest[0] === 'color') rest.shift();
+        rest.shift();
+        EXPORT.tokens.push({ name: g + '/' + (rest.join('-') || 'default'), cssVar: p.name, hex: hex6(p.c), alpha: p.c.a });
+      });
       box.appendChild(grid);
     });
   }
 
+  function publishExport() {
+    var script = document.querySelector('script[src*="cdn.shopify.com/shopifycloud/"]');
+    var file = script ? script.src.split('/').pop() : 'unknown';
+    EXPORT.source = file;
+    EXPORT.version = /polaris-1/.test(file) ? 'Polaris 1' : /polaris-2/.test(file) ? 'Polaris 2.0' : file;
+    EXPORT.capturedAt = new Date().toISOString();
+    window.polarisFoundations = EXPORT;
+
+    var json = JSON.stringify(EXPORT, null, 2);
+    var status = document.getElementById('fd-export-status');
+    var copy = document.getElementById('fd-copy');
+    var download = document.getElementById('fd-download');
+    status.textContent = EXPORT.version + ': ' + EXPORT.colors.length + ' rendered colors, ' + EXPORT.tokens.length + ' color tokens, ' + EXPORT.text.length + ' text styles.';
+    copy.removeAttribute('disabled');
+    download.removeAttribute('disabled');
+    copy.addEventListener('click', function () {
+      navigator.clipboard.writeText(json).then(function () {
+        status.textContent = 'Copied. Paste it into the Polaris Foundations plugin in Figma.';
+      }, function () {
+        status.textContent = 'Clipboard blocked by the browser — use Download instead.';
+      });
+    });
+    download.addEventListener('click', function () {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      a.download = 'polaris-foundations-' + EXPORT.version.replace(/\W+/g, '-').toLowerCase() + '.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
+
   function fail(msg) {
+    document.getElementById('fd-export-status').textContent = 'Nothing to export: ' + msg;
     ['fd-fonts', 'fd-type-tokens', 'fd-colors', 'fd-color-tokens'].forEach(function (id) {
       var b = document.getElementById(id);
       b.textContent = '';
@@ -377,6 +457,7 @@
         renderTypeTokens(props);
         renderColors();
         renderColorTokens(props);
+        publishExport();
       } catch (e) {
         console.error(e);
         fail('Measuring failed: ' + e.message + '. See the browser console.');
