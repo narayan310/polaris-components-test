@@ -1,5 +1,6 @@
 <style>
   body { font: 12px/1.4 Inter, system-ui, sans-serif; margin: 12px; color: #1e1e1e; }
+  input[type=file] { margin-bottom: 8px; }
   textarea { width: 100%; height: 150px; box-sizing: border-box; font: 11px/1.4 ui-monospace, Menlo, monospace; }
   label { display: block; margin: 8px 0; }
   button { margin-top: 4px; padding: 6px 12px; background: #0d99ff; color: #fff; border: 0; border-radius: 6px; font-weight: 600; cursor: pointer; }
@@ -7,7 +8,8 @@
   #status { margin-top: 10px; white-space: pre-wrap; }
   .error { color: #c4302b; }
 </style>
-<p>Paste the JSON from <b>Export to Figma → Copy foundations JSON</b> on the Polaris components site.</p>
+<p>Choose the file from <b>Export to Figma → Download JSON</b> on the Polaris components site, or paste the copied JSON below.</p>
+<input type="file" id="file" accept=".json,application/json">
 <textarea id="json" placeholder='{"colors": [...], "text": [...]}'></textarea>
 <label><input type="checkbox" id="tokens" checked> Import raw color tokens (if any were found)</label>
 <label><input type="checkbox" id="specimen" checked> Draw a specimen frame on this page</label>
@@ -15,6 +17,15 @@
 <div id="status"></div>
 <script>
   var go = document.getElementById('go');
+  document.getElementById('file').onchange = function (e) {
+    var f = e.target.files[0];
+    if (!f) return;
+    f.text().then(function (text) {
+      document.getElementById('json').value = text;
+      status.className = '';
+      status.textContent = 'Loaded ' + f.name + '. Press Import.';
+    });
+  };
   var status = document.getElementById('status');
   go.onclick = function () {
     var data;

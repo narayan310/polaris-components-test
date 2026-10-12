@@ -26,9 +26,16 @@ Work in this order: foundations first, so the components can use them.
 
 ### 1. Foundations → variables and text styles
 
-1. In the **Figma desktop app**: Plugins → Development → **Import plugin from manifest…** and pick `figma-plugin/manifest.json` from this repo (download the repo ZIP first). Development plugins only run in the desktop app.
-2. Open `index.html`, wait for the measurements, then press **Copy foundations JSON** (or **Download JSON**).
-3. In your library file run Plugins → Development → **Polaris Foundations Import**, paste the JSON and press **Import**.
+There are two different JSON files involved; don't mix them up:
+
+| File | Used for |
+|---|---|
+| `figma-plugin/manifest.json` (in this repo) | Installing the plugin, once |
+| `polaris-foundations-….json` (from the site's **Download JSON** button) | The data you import, each time |
+
+1. **Install the plugin (once).** In the **Figma desktop app**: main menu → Plugins → Development → **Import plugin from manifest…** and pick `figma-plugin/manifest.json` from the unzipped repo. Figma shows no confirmation; the plugin simply appears under Plugins → Development. Development plugins only run in the desktop app.
+2. **Export.** Open `index.html`, wait for the measurements, then press **Download JSON** (or **Copy foundations JSON**).
+3. **Import.** In your library file run Plugins → Development → **Polaris Foundations Import**, choose the downloaded file (or paste the copied JSON) and press **Import**.
 
 You get:
 - A **Polaris** variable collection with `Rendered/…` colors (sampled from real components, semantic names) and `Tokens/…` (Polaris' own CSS variables, if it exposes any).
@@ -50,11 +57,4 @@ Overlays (modal, popover, menu, tooltip) only render while open, so capture them
 
 Build the patterns in `patterns.html` from instances of your new components rather than importing them.
 
-## Import to Figma
-
-1. Install the **html.to.design** Figma plugin and its Chrome extension.
-2. Import the hosted URL, or capture the open tab with the extension.
-3. Import at 1440px for desktop and 375px for mobile; the components are responsive.
-4. Modals, popovers, menus and tooltips render only when open. Open each one, then capture the tab.
-
-Polaris renders inside Shadow DOM, so check a single section first before you import the whole page.
+Polaris renders inside Shadow DOM, so capture a single set first and check the result before importing everything.
