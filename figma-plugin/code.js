@@ -443,6 +443,33 @@ function buildSvg(node, ctx) {
   }
 }
 
+// CSS margins are invisible to auto layout, so take spacing from the measured positions instead
+// of the CSS gap. Uneven spacing can't be expressed as one item spacing: return null and the
+// frame is built with absolute positions instead, which keeps the rendered layout exact.
+function measuredLayout(node, L) {
+  if (L.wrap) return L;
+  var row = L.direction === 'row';
+  var start = row ? 'x' : 'y', extent = row ? 'w' : 'h';
+  var flow = node.children.filter(function (c) { return c.position !== 'absolute'; });
+  if (!flow.length) return L;
+  var out = Object.assign({}, L, { padding: L.padding.slice() });
+  var distributed = /space-(between|around|evenly)/.test(L.justify);
+  if (flow.length > 1 && !distributed) {
+    var gaps = [];
+    for (var i = 1; i < flow.length; i++) gaps.push(flow[i][start] - (flow[i - 1][start] + flow[i - 1][extent]));
+    var min = Math.min.apply(null, gaps), max = Math.max.apply(null, gaps);
+    if (max - min > 1.5 || min < -0.5) return null;
+    out.gap = Math.round((min + max) / 2);
+  }
+  // Leading margin on the first item, when items pack to the start.
+  if ((JUSTIFY[L.justify] || 'MIN') === 'MIN') {
+    var lead = flow[0][start] - node[start];
+    var p = row ? 3 : 0;
+    if (lead > out.padding[p] + 0.5) out.padding[p] = Math.round(lead);
+  }
+  return out;
+}
+
 async function buildNode(node, ctx, target) {
   if (node.type === 'text') return buildText(node, ctx);
   if (node.type === 'svg') return buildSvg(node, ctx);
@@ -458,7 +485,8 @@ async function buildNode(node, ctx, target) {
   var frame = target || figma.createFrame();
   applyBox(frame, node, ctx.binder);
   size(frame, node.w, node.h);
-  var L = node.layout;
+  var L = node.layout ? measuredLayout(node, node.layout) : null;
+  if (node.layout && !L) ctx.absoluteLayouts++;
   if (L) {
     frame.layoutMode = L.direction === 'row' ? 'HORIZONTAL' : 'VERTICAL';
     frame.itemSpacing = L.gap;
@@ -505,9 +533,10 @@ async function buildNode(node, ctx, target) {
       return b.node.position !== 'absolute' && (L.align === 'stretch' || L.align === 'normal') &&
         /auto|stretch|normal/.test(b.node.alignSelf || 'auto') && Math.abs(b.node.w - innerWidth) <= 1.5;
     });
-    frame.primaryAxisSizingMode = 'AUTO';
+    // A wrapping row only wraps at a fixed width; hugging would put every item on one line.
+    frame.primaryAxisSizingMode = L.wrap ? 'FIXED' : 'AUTO';
     frame.counterAxisSizingMode = stretchers.length ? 'FIXED' : 'AUTO';
-    var primaryOk = Math.abs((horizontal ? frame.width : frame.height) - (horizontal ? node.w : node.h)) <= 1.5;
+    var primaryOk = !L.wrap && Math.abs((horizontal ? frame.width : frame.height) - (horizontal ? node.w : node.h)) <= 1.5;
     var counterOk = stretchers.length || Math.abs((horizontal ? frame.height : frame.width) - (horizontal ? node.h : node.w)) <= 1.5;
     if (!primaryOk) frame.primaryAxisSizingMode = 'FIXED';
     if (!counterOk) frame.counterAxisSizingMode = 'FIXED';
@@ -530,7 +559,7 @@ async function buildComponents(data) {
   var ctx = {
     binder: await makeBinder(data.version),
     available: await figma.listAvailableFontsAsync(),
-    fonts: {}, fallbacks: {}, svgFailures: 0, textStyled: 0,
+    fonts: {}, fallbacks: {}, svgFailures: 0, textStyled: 0, absoluteLayouts: 0,
   };
 
   var page = figma.createPage();
@@ -593,6 +622,7 @@ async function buildComponents(data) {
       ? 'Colors: ' + ctx.binder.bound + ' bound to Polaris variables, ' + ctx.binder.raw + ' left as raw values (no variable with that value and a fitting name).'
       : 'No "Polaris" variable collection found, so colors are raw values. Import the foundations first to bind them.',
     'Text layers using your text styles: ' + ctx.textStyled + '.',
+    'Containers kept as fixed positions (uneven spacing auto layout cannot express): ' + ctx.absoluteLayouts + '.',
   ];
   Object.keys(ctx.fallbacks).forEach(function (f) { report.push('Font fallback: ' + f + '.'); });
   if (emptyVariants) report.unshift('WARNING: ' + emptyVariants + ' of ' + variants + ' variants were empty in the export, so their components are empty. Re-export from the latest capture page.', '');
