@@ -2,12 +2,20 @@
 //   - a "Polaris" color variable collection, one mode per Polaris version (re-running updates in place)
 //   - text styles for the measured type hierarchy
 //   - optionally, a specimen frame that uses both, as a visual check
-figma.showUI(__html__, { width: 420, height: 420 });
+// Bump when the plugin learns a new export kind, so a stale copy is easy to spot.
+var PLUGIN_VERSION = '4 (foundations, components, screens)';
+var KNOWN_KINDS = ['polaris-components', 'polaris-screens'];
+
+figma.showUI(__html__, { width: 420, height: 460 });
+figma.ui.postMessage({ type: 'version', version: PLUGIN_VERSION });
 
 figma.ui.onmessage = async function (msg) {
   if (msg.type !== 'import') return;
   try {
     var kind = msg.data && msg.data.kind;
+    if (kind && KNOWN_KINDS.indexOf(kind) === -1) {
+      throw new Error('This is a "' + kind + '" export, which this plugin version (' + PLUGIN_VERSION + ') does not support. Update the plugin: re-import figma-plugin/manifest.json from the latest download.');
+    }
     var report = kind === 'polaris-components' ? await buildComponents(msg.data, msg.options || {})
       : kind === 'polaris-screens' ? await buildScreens(msg.data)
       : await importFoundations(msg.data, msg.options || {});
