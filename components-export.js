@@ -652,15 +652,34 @@
   var button = document.getElementById('cap-export');
   var screenButton = document.getElementById('screen-export');
   var status = document.getElementById('cap-export-status') || document.getElementById('screen-export-status');
-  var tags = ['s-button', 's-badge', 's-text-field', 's-section'];
+  // Wait for the Polaris elements this page actually uses: Polaris may only register the ones
+  // present on the page, so waiting for a fixed list can hang (the dashboard has no text field).
+  function enable() { [button, debugButton, screenButton].forEach(function (b) { if (b) b.disabled = false; }); }
+  var tags = {};
+  Array.prototype.forEach.call(document.querySelectorAll('*'), function (el) {
+    var t = el.tagName.toLowerCase();
+    if (t.indexOf('s-') === 0) tags[t] = true;
+  });
+  var pending = Object.keys(tags).filter(function (t) { return !customElements.get(t); });
   var timeout = new Promise(function (_, reject) { setTimeout(reject, 8000); });
-  Promise.race([Promise.all(tags.map(function (t) { return customElements.whenDefined(t); })), timeout]).then(function () {
+  Promise.race([Promise.all(Object.keys(tags).map(function (t) {
+    return customElements.whenDefined(t).then(function () {
+      var i = pending.indexOf(t);
+      if (i !== -1) pending.splice(i, 1);
+    });
+  })), timeout]).then(function () {
     return new Promise(function (r) { setTimeout(r, 800); });
   }).then(function () {
-    [button, debugButton, screenButton].forEach(function (b) { if (b) b.disabled = false; });
+    enable();
     status.textContent = 'Ready.';
   }, function () {
-    status.textContent = 'Polaris did not load, so there is nothing to export.';
+    var loaded = !!document.querySelector('script[src*="cdn.shopify.com/shopifycloud/"]') && Object.keys(tags).length > pending.length;
+    if (loaded) {
+      enable();
+      status.textContent = 'Ready, but these elements never registered and will be missing from the export: ' + pending.join(', ') + '.';
+    } else {
+      status.textContent = 'Polaris did not load (check your internet connection), so there is nothing to export.';
+    }
   });
 
   if (screenButton) screenButton.addEventListener('click', function () {
