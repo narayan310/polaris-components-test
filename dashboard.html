@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard Skeleton</title>
+  <script src="open-shadow.js"></script>
+  <!-- Polaris 2.0 RC by default; add ?polaris=1 to the URL to compare with Polaris 1 -->
+  <script>
+    (function () {
+      var file = new URLSearchParams(location.search).get('polaris') === '1' ? 'polaris-1.js' : 'polaris-2.0-rc.js';
+      document.write('<script src="https://cdn.shopify.com/shopifycloud/' + file + '"><\/script>');
+    })();
+  </script>
+  <style>
+    /*
+      ADMIN FRAME — APPROXIMATION.
+      The side navigation, search, store picker and Sidekick bar are drawn by the Shopify admin, not by
+      Polaris, so they are hand-built here from Shopify's published description of the new admin
+      (Sept 2026): dark collapsible side nav that holds search, notifications and the store picker;
+      no top bar; Sidekick as a floating chat input at the bottom of the page. Exact sizes and colors
+      aren't published: calibrate these values against a screenshot of your own admin.
+    */
+    :root {
+      --frame-bg: #1a1a1a;          /* dark admin frame / side nav */
+      --nav-fg: #e3e3e3;
+      --nav-muted: #8f8f8f;
+      --nav-hover-bg: #2a2a2a;
+      --nav-active-bg: #353535;
+      --nav-active-fg: #ffffff;
+      --nav-input-bg: #2a2a2a;
+      --nav-width: 240px;
+      --nav-width-collapsed: 60px;
+      --content-bg: #f1f1f1;        /* page canvas behind Polaris sections */
+      --content-inset: 8px;         /* gap between the dark frame and the content panel */
+      --content-radius: 12px;
+      --screen-width: 1440px;
+      --screen-min-height: 960px;
+    }
+
+    body { margin: 0; background: #e5e5e5; font: 13px/20px system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .toolbar { padding: 24px 40px; max-width: 900px; }
+    .toolbar h1 { font-size: 20px; margin: 0 0 8px; }
+    .toolbar p { margin: 0 0 8px; color: #616161; }
+    .toolbar button { font: 600 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 8px; border: 0; background: #303030; color: #fff; cursor: pointer; }
+    .toolbar button:disabled { opacity: .4; cursor: default; }
+    #screen-export-status { margin-left: 8px; color: #616161; }
+    .screen-label { margin: 32px 40px 8px; font: 600 12px system-ui, sans-serif; color: #616161; }
+
+    .admin { display: flex; width: var(--screen-width); min-height: var(--screen-min-height); margin: 0 40px 40px; background: var(--frame-bg); }
+
+    /* ---- side navigation ---- */
+    .nav { flex: none; width: var(--nav-width); display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; color: var(--nav-fg); font: 500 13px/20px Inter, ShopifyInter, system-ui, sans-serif; box-sizing: border-box; }
+    .nav.collapsed { width: var(--nav-width-collapsed); align-items: center; }
+    .nav svg { width: 18px; height: 18px; flex: none; }
+    .store { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; margin-bottom: 8px; }
+    .store-logo { width: 28px; height: 28px; border-radius: 8px; background: #5c6ac4; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; flex: none; }
+    .store-name { flex: 1; font-weight: 600; color: var(--nav-active-fg); }
+    .search { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--nav-input-bg); color: var(--nav-muted); margin-bottom: 12px; }
+    .search .grow { flex: 1; }
+    .kbd { font-size: 11px; line-height: 16px; padding: 0 6px; border-radius: 4px; background: #3a3a3a; color: var(--nav-fg); }
+    .item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; color: var(--nav-fg); }
+    .item.active { background: var(--nav-active-bg); color: var(--nav-active-fg); }
+    .item.sub { padding-left: 34px; color: var(--nav-muted); }
+    .item.sub.active { color: var(--nav-active-fg); background: transparent; }
+    .item .grow { flex: 1; }
+    .count { font-size: 11px; line-height: 16px; padding: 0 6px; border-radius: 8px; background: #3a3a3a; color: var(--nav-fg); }
+    .group { display: flex; align-items: center; gap: 4px; padding: 12px 8px 4px; color: var(--nav-muted); font-size: 12px; }
+    .group .grow { flex: 1; }
+    .nav-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
+    .nav.collapsed .item, .nav.collapsed .store, .nav.collapsed .search { padding: 8px; justify-content: center; }
+    .nav.collapsed .search { background: transparent; margin-bottom: 8px; }
+    .dot { width: 6px; height: 6px; border-radius: 3px; background: #e51c00; }
+
+    /* ---- content panel (the app area; everything inside is real Polaris) ---- */
+    .main { flex: 1; position: relative; margin: var(--content-inset) var(--content-inset) var(--content-inset) 0; background: var(--content-bg); border-radius: var(--content-radius); padding: 8px 0 104px; overflow: hidden; }
+    .sidekick { font: 13px/20px Inter, ShopifyInter, system-ui, sans-serif; position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); width: 560px; display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-radius: 9999px; background: #ffffff; box-shadow: 0 8px 24px rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.08); color: #616161; box-sizing: border-box; }
+    .sidekick svg { width: 18px; height: 18px; flex: none; color: #8051ff; }
+    .sidekick .grow { flex: 1; }
+    .sidekick .send { width: 28px; height: 28px; border-radius: 14px; background: #1a1a1a; display: flex; align-items: center; justify-content: center; flex: none; }
+    .sidekick .send svg { width: 14px; height: 14px; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>Dashboard skeleton</h1>
+    <p>A starting point for a design: the new admin frame (approximation, see the note in this file's CSS) around a real Polaris 2.0 dashboard. Buttons, badges and checkboxes are exported as instances of your Figma library components.</p>
+    <p>
+      <button id="screen-export" disabled>Export screens JSON</button>
+      <span id="screen-export-status">Waiting for Polaris…</span>
+    </p>
+  </div>
+
+  <div class="screen-label">Dashboard — navigation expanded</div>
+  <div class="admin" data-figma-screen="Dashboard — nav expanded" data-nav="expanded"></div>
+
+  <div class="screen-label">Dashboard — navigation collapsed</div>
+  <div class="admin" data-figma-screen="Dashboard — nav collapsed" data-nav="collapsed"></div>
+
+  <script>
+    // Placeholder line icons (the admin's own icon set isn't available to apps).
+    var ICONS = {
+      home: '<path d="M3.5 9 10 3.5 16.5 9v7a1 1 0 0 1-1 1h-3v-5h-5v5h-3a1 1 0 0 1-1-1z"/>',
+      orders: '<path d="M3.5 6.5h13l-1 10h-11z"/><path d="M7 6.5V5a3 3 0 0 1 6 0v1.5"/>',
+      products: '<path d="M3.5 10.5V4a.5.5 0 0 1 .5-.5h6.5l6 6-7 7z"/><circle cx="7" cy="7" r="1"/>',
+      customers: '<circle cx="10" cy="7" r="3"/><path d="M4 16.5c.8-3 3.2-4.5 6-4.5s5.2 1.5 6 4.5"/>',
+      marketing: '<path d="M3.5 8v4h3l6 3.5v-11L6.5 8z"/><path d="M15.5 8.5v3"/>',
+      discounts: '<circle cx="7" cy="7" r="1.5"/><circle cx="13" cy="13" r="1.5"/><path d="m5 15 10-10"/>',
+      content: '<path d="M5 3.5h7l3 3v10H5z"/><path d="M8 10h4M8 13h4"/>',
+      markets: '<circle cx="10" cy="10" r="6.5"/><path d="M3.5 10h13M10 3.5c2 2 2 11 0 13M10 3.5c-2 2-2 11 0 13"/>',
+      analytics: '<path d="M4 16.5h12M6.5 14v-4M10 14V6M13.5 14v-6"/>',
+      store: '<path d="M3.5 7.5 5 3.5h10l1.5 4"/><path d="M4.5 8v8.5h11V8"/><path d="M3.5 7.5a2 2 0 0 0 4 0 2 2 0 0 0 5 0 2 2 0 0 0 4 0"/>',
+      pos: '<rect x="4" y="3.5" width="12" height="13" rx="1.5"/><path d="M7 7h6M7 10h6"/>',
+      apps: '<rect x="3.5" y="3.5" width="5" height="5" rx="1"/><rect x="11.5" y="3.5" width="5" height="5" rx="1"/><rect x="3.5" y="11.5" width="5" height="5" rx="1"/><rect x="11.5" y="11.5" width="5" height="5" rx="1"/>',
+      bell: '<path d="M6 13.5V9a4 4 0 0 1 8 0v4.5l1.5 1.5h-11z"/><path d="M8.5 16.5a1.5 1.5 0 0 0 3 0"/>',
+      settings: '<circle cx="10" cy="10" r="2.5"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2M5 5l1.4 1.4M13.6 13.6 15 15M5 15l1.4-1.4M13.6 6.4 15 5"/>',
+      search: '<circle cx="9" cy="9" r="5"/><path d="m13 13 3.5 3.5"/>',
+      chevron: '<path d="m6 8 4 4 4-4"/>',
+      collapse: '<rect x="3.5" y="4" width="13" height="12" rx="2"/><path d="M8 4v12"/>',
+      sparkle: '<path d="M10 3c.6 3.6 3.4 6.4 7 7-3.6.6-6.4 3.4-7 7-.6-3.6-3.4-6.4-7-7 3.6-.6 6.4-3.4 7-7z"/>',
+      send: '<path d="M10 16V4M5 9l5-5 5 5"/>',
+    };
+    function icon(name) {
+      return '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + '</svg>';
+    }
+
+    var NAV = [
+      ['home', 'Home', { active: true }],
+      ['orders', 'Orders', { count: 12 }],
+      ['products', 'Products'],
+      ['customers', 'Customers'],
+      ['marketing', 'Marketing'],
+      ['discounts', 'Discounts'],
+      ['content', 'Content'],
+      ['markets', 'Markets'],
+      ['analytics', 'Analytics'],
+    ];
+    var CHANNELS = [['store', 'Online Store'], ['pos', 'Point of Sale']];
+    // Your app's menu: in production these come from <s-app-nav> in your app.
+    var APP_NAV = ['Dashboard', 'Campaigns', 'Settings'];
+
+    function navHTML(collapsed) {
+      var h = '<nav class="nav' + (collapsed ? ' collapsed' : '') + '">';
+      h += '<div class="store"><div class="store-logo">SC</div>' + (collapsed ? '' : '<span class="store-name">Snow Supply Co.</span>' + icon('chevron')) + '</div>';
+      h += '<div class="search">' + icon('search') + (collapsed ? '' : '<span class="grow">Search</span><span class="kbd">⌘K</span>') + '</div>';
+      NAV.forEach(function (n) {
+        var o = n[2] || {};
+        h += '<div class="item' + (o.active ? ' active' : '') + '">' + icon(n[0]) +
+          (collapsed ? '' : '<span class="grow">' + n[1] + '</span>' + (o.count ? '<span class="count">' + o.count + '</span>' : '')) + '</div>';
+      });
+      if (!collapsed) h += '<div class="group"><span class="grow">Sales channels</span>' + icon('chevron') + '</div>';
+      CHANNELS.forEach(function (c) { h += '<div class="item">' + icon(c[0]) + (collapsed ? '' : '<span class="grow">' + c[1] + '</span>') + '</div>'; });
+      if (!collapsed) h += '<div class="group"><span class="grow">Apps</span>' + icon('chevron') + '</div>';
+      h += '<div class="item">' + icon('apps') + (collapsed ? '' : '<span class="grow">Your app</span>') + '</div>';
+      if (!collapsed) APP_NAV.forEach(function (label, i) { h += '<div class="item sub' + (i === 0 ? ' active' : '') + '"><span>' + label + '</span></div>'; });
+      h += '<div class="nav-bottom">';
+      h += '<div class="item">' + icon('bell') + (collapsed ? '' : '<span class="grow">Notifications</span><span class="dot"></span>') + '</div>';
+      h += '<div class="item">' + icon('settings') + (collapsed ? '' : '<span class="grow">Settings</span>') + '</div>';
+      h += '<div class="item">' + icon('collapse') + (collapsed ? '' : '<span class="grow">Collapse</span>') + '</div>';
+      h += '</div></nav>';
+      return h;
+    }
+
+    // Markers that become instances of your Figma library components.
+    function btn(variant, label, attrs) {
+      return '<s-button variant="' + variant.toLowerCase() + '"' + (attrs || '') + ' data-figma-instance="Button" data-figma-variant="Variant=' + variant + ', Tone=Auto, State=Default">' + label + '</s-button>';
+    }
+    function badge(tone, label) {
+      return '<s-badge' + (tone === 'Auto' ? '' : ' tone="' + tone.toLowerCase() + '"') + ' data-figma-instance="Badge" data-figma-variant="Tone=' + tone + ', Color=Base, Size=Base">' + label + '</s-badge>';
+    }
+    function checkbox(label, checked) {
+      return '<s-checkbox label="' + label + '"' + (checked ? ' checked' : '') + ' data-figma-instance="Checkbox" data-figma-variant="State=' + (checked ? 'Checked' : 'Unchecked') + ', Disabled=No" data-figma-label="' + label + '"></s-checkbox>';
+    }
+    function metric(label, value, tone, delta) {
+      return '<s-section><s-stack gap="small-200"><s-text color="subdued">' + label + '</s-text><s-heading>' + value + '</s-heading>' + badge(tone, delta) + '</s-stack></s-section>';
+    }
+    function orderRow(n, customer, paid, fulfil, total) {
+      return '<s-table-row><s-table-cell>' + n + '</s-table-cell><s-table-cell>' + customer + '</s-table-cell><s-table-cell>' + paid +
+        '</s-table-cell><s-table-cell>' + fulfil + '</s-table-cell><s-table-cell>' + total + '</s-table-cell></s-table-row>';
+    }
+
+    var MAIN =
+      '<div class="main">' +
+      '<s-page heading="Dashboard" inlineSize="large">' +
+        btn('Primary', 'Create campaign', ' slot="primary-action"') +
+        '<s-stack gap="base">' +
+          '<s-stack direction="inline" gap="small-200">' + btn('Secondary', 'Last 30 days') + btn('Secondary', 'All channels') + '</s-stack>' +
+          '<s-grid gridTemplateColumns="repeat(4, 1fr)" gap="base">' +
+            metric('Total sales', '$12,480', 'Success', '+12%') +
+            metric('Orders', '318', 'Critical', '−4%') +
+            metric('Conversion rate', '2.8%', 'Auto', '0%') +
+            metric('Returning customers', '41%', 'Success', '+3%') +
+          '</s-grid>' +
+          '<s-grid gridTemplateColumns="2fr 1fr" gap="base">' +
+            '<s-section heading="Recent orders" padding="none"><s-table>' +
+              '<s-table-header-row><s-table-header listSlot="primary">Order</s-table-header><s-table-header listSlot="secondary">Customer</s-table-header>' +
+              '<s-table-header listSlot="inline">Payment</s-table-header><s-table-header listSlot="inline">Fulfillment</s-table-header><s-table-header listSlot="labeled" format="currency">Total</s-table-header></s-table-header-row>' +
+              '<s-table-body>' +
+                orderRow('#1024', 'Jane Doe', badge('Success', 'Paid'), badge('Warning', 'Unfulfilled'), '$128.00') +
+                orderRow('#1023', 'Sam Lee', badge('Caution', 'Pending'), badge('Success', 'Fulfilled'), '$54.50') +
+                orderRow('#1022', 'Alex Kim', badge('Success', 'Paid'), badge('Success', 'Fulfilled'), '$212.00') +
+                orderRow('#1021', 'Priya Shah', badge('Critical', 'Refunded'), badge('Auto', 'Restocked'), '$0.00') +
+              '</s-table-body></s-table></s-section>' +
+            '<s-section heading="Setup guide"><s-stack gap="base">' +
+              '<s-paragraph color="subdued">1 of 3 tasks complete</s-paragraph>' +
+              '<s-stack gap="small">' + checkbox('Connect your account', true) + checkbox('Configure shipping rates', false) + checkbox('Publish your first product', false) + '</s-stack>' +
+              btn('Primary', 'Configure shipping') +
+            '</s-stack></s-section>' +
+          '</s-grid>' +
+          '<s-section heading="Campaigns"><s-stack gap="base" alignItems="center">' +
+            '<s-heading>No campaigns yet</s-heading>' +
+            '<s-paragraph color="subdued">Campaigns you create will show their performance here.</s-paragraph>' +
+            btn('Primary', 'Create campaign') +
+          '</s-stack></s-section>' +
+        '</s-stack>' +
+      '</s-page>' +
+      '<div class="sidekick">' + icon('sparkle') + '<span class="grow">Ask Sidekick anything</span><span class="send">' + icon('send') + '</span></div>' +
+      '</div>';
+
+    document.querySelectorAll('[data-figma-screen]').forEach(function (screen) {
+      screen.innerHTML = navHTML(screen.getAttribute('data-nav') === 'collapsed') + MAIN;
+    });
+  </script>
+  <script src="components-export.js"></script>
+</body>
+</html>

@@ -67,6 +67,9 @@
           if (n.tagName === 'SLOT') {
             var assigned = n.assignedNodes({ flatten: true });
             expand(assigned.length ? assigned : n.childNodes, n);
+          } else if (n.hasAttribute('data-figma-instance')) {
+            // Library component markers stay as one node even when they have no box of their own.
+            out.push({ node: n, styleEl: styleEl });
           } else if (getComputedStyle(n).display === 'contents') {
             expand(n.shadowRoot ? n.shadowRoot.childNodes : n.childNodes, n);
           } else {
@@ -411,7 +414,39 @@
     return (n.fills && n.fills.length) || n.fill || n.stroke || (n.effects && n.effects.length) || n.radius.some(function (r) { return r > 0; });
   }
 
-  function serElement(el, origin) {
+  // An element marked data-figma-instance="Set" data-figma-variant="Prop=Value, …" becomes an
+  // instance of that library component in Figma. Its rendered tree travels along as a fallback for
+  // files where the component doesn't exist, and its text becomes the instance's label override.
+  function serInstance(el, origin) {
+    var fallback;
+    if (getComputedStyle(el).display === 'contents') {
+      var kids = renderedChildren(el).map(function (c) {
+        return c.node.nodeType === 3 ? serText(c.node, c.styleEl, origin) : serElement(c.node, origin);
+      }).filter(Boolean);
+      if (!kids.length) return null;
+      var x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+      kids.forEach(function (c) { x1 = Math.min(x1, c.x); y1 = Math.min(y1, c.y); x2 = Math.max(x2, c.x + c.w); y2 = Math.max(y2, c.y + c.h); });
+      fallback = kids.length === 1 ? kids[0] : {
+        type: 'frame', name: nameOf(el), x: round(x1), y: round(y1), w: round(x2 - x1), h: round(y2 - y1),
+        fills: [], stroke: null, radius: [0, 0, 0, 0], effects: [], opacity: 1, clip: false, position: 'flow', grow: 0, alignSelf: 'auto', children: kids,
+      };
+    } else {
+      fallback = serElement(el, origin, true);
+    }
+    if (!fallback) return null;
+    var cs = getComputedStyle(el);
+    return {
+      type: 'instance', name: el.getAttribute('data-figma-instance'),
+      set: el.getAttribute('data-figma-instance'), variant: el.getAttribute('data-figma-variant') || '',
+      label: (el.getAttribute('data-figma-label') || el.textContent).replace(/\s+/g, ' ').trim(),
+      x: fallback.x, y: fallback.y, w: fallback.w, h: fallback.h,
+      position: cs.position === 'absolute' || cs.position === 'fixed' ? 'absolute' : 'flow',
+      grow: px(cs.flexGrow), alignSelf: cs.alignSelf, fallback: fallback,
+    };
+  }
+
+  function serElement(el, origin, notInstance) {
+    if (!notInstance && el.hasAttribute('data-figma-instance')) return serInstance(el, origin);
     var cs = getComputedStyle(el);
     if (!visible(cs)) return null;
     var r = el.getBoundingClientRect();
@@ -591,22 +626,67 @@
   }
   window.polarisDebugInfo = debugInfo;
 
+  // Screens: whole layouts (e.g. dashboard.html) marked data-figma-screen="Name".
+  function exportScreens() {
+    var script = document.querySelector('script[src*="cdn.shopify.com/shopifycloud/"]');
+    var file = script ? script.src.split('/').pop() : 'unknown';
+    return {
+      kind: 'polaris-screens', exportVersion: 3, source: file,
+      version: /polaris-1/.test(file) ? 'Polaris 1' : /polaris-2/.test(file) ? 'Polaris 2.0' : file,
+      capturedAt: new Date().toISOString(),
+      screens: Array.prototype.map.call(document.querySelectorAll('[data-figma-screen]'), function (el) {
+        return { name: el.getAttribute('data-figma-screen'), tree: serialiseFrame(el) };
+      }),
+    };
+  }
+  window.polarisExportScreens = exportScreens;
+
+  function download(data, name) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   var button = document.getElementById('cap-export');
-  var status = document.getElementById('cap-export-status');
+  var screenButton = document.getElementById('screen-export');
+  var status = document.getElementById('cap-export-status') || document.getElementById('screen-export-status');
   var tags = ['s-button', 's-badge', 's-text-field', 's-section'];
   var timeout = new Promise(function (_, reject) { setTimeout(reject, 8000); });
   Promise.race([Promise.all(tags.map(function (t) { return customElements.whenDefined(t); })), timeout]).then(function () {
     return new Promise(function (r) { setTimeout(r, 800); });
   }).then(function () {
-    button.disabled = false;
-    debugButton.disabled = false;
+    [button, debugButton, screenButton].forEach(function (b) { if (b) b.disabled = false; });
     status.textContent = 'Ready.';
   }, function () {
     status.textContent = 'Polaris did not load, so there is nothing to export.';
   });
 
+  if (screenButton) screenButton.addEventListener('click', function () {
+    status.textContent = 'Exporting…';
+    setTimeout(function () {
+      try {
+        var data = exportScreens();
+        var instances = 0, layers = 0;
+        data.screens.forEach(function (s) {
+          (function walk(n) {
+            layers++;
+            if (n.type === 'instance') instances++;
+            (n.children || []).forEach(walk);
+          })(s.tree);
+        });
+        download(data, 'polaris-screens-' + data.version.replace(/\W+/g, '-').toLowerCase() + '.json');
+        status.textContent = 'Downloaded ' + data.screens.length + ' screens: ' + layers + ' layers, ' + instances + ' library instances. Load the file in the Figma plugin.';
+      } catch (e) {
+        console.error(e);
+        status.textContent = 'Export failed: ' + e.message;
+      }
+    }, 0);
+  });
+
   var debugButton = document.getElementById('cap-debug');
-  debugButton.addEventListener('click', function () {
+  if (debugButton) debugButton.addEventListener('click', function () {
     var text = debugInfo();
     var box = document.getElementById('cap-debug-text');
     box.value = text;
@@ -619,7 +699,7 @@
     });
   });
 
-  button.addEventListener('click', function () {
+  if (button) button.addEventListener('click', function () {
     status.textContent = 'Exporting…';
     setTimeout(function () {
       try {
@@ -643,11 +723,7 @@
             })(i.tree);
           });
         });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
-        a.download = 'polaris-components-' + data.version.replace(/\W+/g, '-').toLowerCase() + '.json';
-        a.click();
-        URL.revokeObjectURL(a.href);
+        download(data, 'polaris-components-' + data.version.replace(/\W+/g, '-').toLowerCase() + '.json');
         status.textContent = 'Downloaded ' + data.sets.length + ' sets, ' + count + ' variants: ' + layers + ' layers (' + filled + ' filled boxes, ' + texts + ' text, ' + icons + ' icons).' +
           (empty ? ' Warning: ' + empty + ' variants captured nothing — Polaris may be hiding its internals; tell Claude.' : '') +
           (outside ? ' Warning: ' + outside + ' layers fall outside their parent and may be clipped in Figma; tell Claude.' : '') +

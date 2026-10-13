@@ -7,10 +7,12 @@ figma.showUI(__html__, { width: 420, height: 420 });
 figma.ui.onmessage = async function (msg) {
   if (msg.type !== 'import') return;
   try {
-    var isComponents = msg.data && msg.data.kind === 'polaris-components';
-    var report = isComponents ? await buildComponents(msg.data, msg.options || {}) : await importFoundations(msg.data, msg.options || {});
+    var kind = msg.data && msg.data.kind;
+    var report = kind === 'polaris-components' ? await buildComponents(msg.data, msg.options || {})
+      : kind === 'polaris-screens' ? await buildScreens(msg.data)
+      : await importFoundations(msg.data, msg.options || {});
     figma.ui.postMessage({ type: 'done', report: report });
-    figma.notify(isComponents ? 'Polaris components built' : 'Polaris foundations imported');
+    figma.notify(kind === 'polaris-components' ? 'Polaris components built' : kind === 'polaris-screens' ? 'Polaris screens built' : 'Polaris foundations imported');
   } catch (e) {
     var detail = e && e.message ? e.message : String(e);
     console.error(e);
@@ -509,7 +511,29 @@ function measuredLayout(node, L) {
 // Builds `node` into `target` when given (an existing frame or component), else into a new frame.
 // Children are reconciled by position: an existing child of the same kind and name is updated in
 // place; anything else is created fresh, and leftovers are removed.
+// A library component placed in a screen: an instance of the matching variant with its label
+// overridden, or, if the library doesn't have it, the rendered fallback built as plain layers.
+async function buildInstance(node, ctx) {
+  var set = ctx.library && ctx.library[node.set];
+  var comp = set && set[variantKey(node.variant)];
+  if (!comp) {
+    ctx.missingInstances[node.set + ' / ' + node.variant] = 1;
+    return buildNode(node.fallback, ctx);
+  }
+  var inst = comp.createInstance();
+  if (node.label) {
+    var texts = inst.findAll(function (n) { return n.type === 'TEXT' && n.fills !== figma.mixed && n.fills.length; });
+    if (texts.length && texts[0].characters !== node.label) {
+      await loadExistingFonts(texts[0]);
+      texts[0].characters = node.label;
+    }
+  }
+  ctx.instances++;
+  return inst;
+}
+
 async function buildNode(node, ctx, target) {
+  if (node.type === 'instance') return buildInstance(node, ctx);
   if (node.type === 'text') return buildText(node, ctx, target);
   if (node.type === 'svg') return buildSvg(node, ctx);
   if (node.type === 'image') {
@@ -735,6 +759,74 @@ async function buildComponents(data, options) {
   report.push('Images (avatars, thumbnails) are grey placeholders; drop real images in as fills.');
   report.push('', '--- Diagnostics (copy everything below to Claude) ---');
   report = report.concat(await diagnose(page));
+  return report;
+}
+
+// ---------- screens ----------
+// Whole layouts (dashboard.html) built as frames on a "<version> templates" page, using instances
+// of the library's components wherever the page marked them. Templates are starting points that
+// designers duplicate, so a re-import replaces a screen of the same name rather than merging.
+
+async function libraryIndex(version) {
+  var found = await findComponentsPage(version + ' components');
+  var index = {};
+  if (!found.page) return null;
+  found.page.children.forEach(function (set) {
+    if (set.type !== 'COMPONENT_SET') return;
+    index[set.name] = {};
+    set.children.forEach(function (comp) { index[set.name][variantKey(comp.name)] = comp; });
+  });
+  return index;
+}
+
+async function buildScreens(data) {
+  if (!Array.isArray(data.screens)) throw new Error('This does not look like the screens export (missing "screens").');
+  await figma.loadFontAsync({ family: 'Inter', style: 'Regular' });
+  var ctx = {
+    binder: await makeBinder(data.version),
+    available: await figma.listAvailableFontsAsync(),
+    library: await libraryIndex(data.version),
+    fonts: {}, fallbacks: {}, svgFailures: 0, textStyled: 0, absoluteLayouts: 0,
+    reused: 0, created: 0, removed: 0, instances: 0, missingInstances: {},
+  };
+  var pageName = data.version + ' templates';
+  var page = figma.root.children.filter(function (p) { return p.name === pageName; })[0];
+  if (page) await page.loadAsync();
+  else {
+    page = figma.createPage();
+    page.name = pageName;
+    page.backgrounds = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }];
+  }
+  await figma.setCurrentPageAsync(page);
+
+  var built = [], x = 0;
+  for (var i = 0; i < data.screens.length; i++) {
+    var screen = data.screens[i];
+    figma.ui.postMessage({ type: 'progress', text: 'Building ' + screen.name + '…' });
+    var old = page.children.filter(function (n) { return n.name === screen.name; })[0];
+    var frame = await buildNode(screen.tree, ctx);
+    frame.name = screen.name;
+    frame.clipsContent = true;
+    if (old) { frame.x = old.x; frame.y = old.y; old.remove(); }
+    else { frame.x = x; frame.y = 0; }
+    page.appendChild(frame);
+    x = Math.max(x, frame.x + frame.width + 160);
+    built.push(frame);
+  }
+  figma.currentPage.selection = built;
+  figma.viewport.scrollAndZoomIntoView(built);
+
+  var missing = Object.keys(ctx.missingInstances);
+  var report = [
+    'Built ' + built.length + ' screens on page "' + pageName + '": ' + built.map(function (f) { return f.name; }).join(', ') + '.',
+    ctx.library
+      ? 'Library instances: ' + ctx.instances + ' (they update with the components).'
+      : 'No "' + data.version + ' components" page in this file, so components were drawn as plain layers. Build the components first, or enable the published library, to get instances.',
+    missing.length ? 'Not found in the library, drawn as plain layers instead: ' + missing.join('; ') + '.' : null,
+    ctx.binder.hasVariables ? 'Colors: ' + ctx.binder.bound + ' bound to Polaris variables, ' + ctx.binder.raw + ' raw.' : null,
+    'The side navigation, search, store picker and Sidekick bar are an approximation of the new admin frame: compare with your own admin before relying on exact sizes.',
+  ].filter(function (l) { return l !== null; });
+  Object.keys(ctx.fallbacks).forEach(function (f) { report.push('Font fallback: ' + f + '.'); });
   return report;
 }
 

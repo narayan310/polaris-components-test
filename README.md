@@ -8,6 +8,7 @@ Static specimen pages for Shopify **Polaris 2.0** web components (App Home / `s-
 - `components-export.js` — serialises the rendered variants (layout, boxes, text, icons) for the Figma plugin
 - `figma-plugin/` — a local Figma plugin that turns the exports into color variables, text styles and native component sets
 - `patterns.html` — composed patterns: metrics card, setup guide, callout, empty state, index table, resource list, settings
+- `dashboard.html` — a dashboard skeleton in the new admin frame (expanded and collapsed side navigation), exportable as Figma template screens built from library instances
 
 Components load from Shopify's CDN, so you need an internet connection. There is no build step.
 
@@ -83,3 +84,13 @@ Alternative: capture `capture.html` with the **html.to.design** plugin, then nam
 
 Build the patterns in `patterns.html` from instances of your new components rather than importing them.
 
+### 4. Templates → dashboard skeleton
+
+`dashboard.html` is a starting point for a design: a real Polaris 2.0 dashboard (page header and actions, metrics row, recent orders table, setup guide, empty state) inside the **new admin frame**, in two screens: side navigation expanded and collapsed.
+
+1. Build the components first (step 2), in the same file.
+2. Open `dashboard.html` → **Export screens JSON**, and import the file with the plugin.
+
+You get a `Polaris 2.0 templates` page with one 1440px frame per screen. Buttons, badges and checkboxes are **instances of your library components** with their labels overridden, so templates pick up library updates; everything else is plain layers. Re-importing replaces screens of the same name. Duplicate a template into your design files to start a design; the instances stay linked to the published library.
+
+**The admin frame is an approximation.** The side navigation, search, store picker, notifications and the floating Sidekick input are drawn by the Shopify admin, not by Polaris, so they are hand-built from Shopify's description of the redesigned admin (dark collapsible side nav holding search, notifications and the store picker; no top bar; Sidekick as a floating chat input). Sizes, colors and icons aren't published: calibrate the CSS variables at the top of `dashboard.html` against a screenshot of your own admin, then re-export. Your app only controls its own entries under **Apps** (via `s-app-nav`) and the content panel.
