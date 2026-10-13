@@ -49,6 +49,26 @@
     }).filter(Boolean);
   }
 
+  // filter: drop-shadow(color x y blur) … — follows the element's painted shape, like a Figma
+  // drop shadow on a layer without a fill. Polaris uses it on icons (e.g. the checkbox check).
+  function filterShadows(value) {
+    var out = [];
+    if (!value || value === 'none') return out;
+    var i = 0;
+    while ((i = value.indexOf('drop-shadow(', i)) !== -1) {
+      var start = i + 'drop-shadow('.length, depth = 1, j = start;
+      while (j < value.length && depth) { if (value[j] === '(') depth++; if (value[j] === ')') depth--; j++; }
+      var inner = value.slice(start, j - 1).trim();
+      var m = inner.match(/^((?:[a-z-]+\([^)]*\))|#[0-9a-f]+|[a-z]+)\s+(.*)$/i);
+      if (m) {
+        var color = rgba(m[1]), nums = m[2].trim().split(/\s+/).map(px);
+        if (color) out.push({ inset: false, color: color, x: nums[0] || 0, y: nums[1] || 0, blur: nums[2] || 0, spread: 0 });
+      }
+      i = j;
+    }
+    return out;
+  }
+
   function visible(cs) {
     return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0;
   }
@@ -354,7 +374,7 @@
       stroke: borderColor ? { color: borderColor, widths: borders } : null,
       borders: borders,
       radius: [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].map(px),
-      effects: shadows(cs.boxShadow),
+      effects: shadows(cs.boxShadow).concat(filterShadows(cs.filter)),
       opacity: parseFloat(cs.opacity),
     };
   }
@@ -459,12 +479,12 @@
     var tag = el.tagName.toLowerCase();
     if (tag === 'svg') {
       if (r.width === 0 || r.height === 0) return null;
-      return Object.assign(base, { type: 'svg', svg: svgString(el, r) });
+      return Object.assign(base, { type: 'svg', svg: svgString(el, r), effects: filterShadows(cs.filter) });
     }
     if (tag === 'img') return Object.assign(base, { type: 'image', radius: [px(cs.borderTopLeftRadius)] });
 
     var maskIcon = maskSvg(cs, r.width, r.height);
-    if (maskIcon && r.width && r.height) return Object.assign(base, { type: 'svg', svg: maskIcon });
+    if (maskIcon && r.width && r.height) return Object.assign(base, { type: 'svg', svg: maskIcon, effects: filterShadows(cs.filter) });
     var box = boxStyle(cs, r.width, r.height);
     var borders = box.borders;
     delete box.borders;
@@ -574,6 +594,9 @@
     ['Button', 'Variant=Primary, Tone=Auto, State=Loading'],
     ['Checkbox', 'State=Unchecked, Disabled=No'],
     ['Banner', 'Tone=Info, Heading=Yes'],
+    ['Section', 'Heading=Yes'],
+    ['Badge', 'Tone=Success, Color=Base, Size=Base'],
+    ['Text field', 'State=Default'],
   ];
   var DEBUG_PROPS = ['display', 'position', 'backgroundColor', 'backgroundImage', 'borderTopWidth', 'borderTopStyle', 'borderTopColor',
     'borderRadius', 'boxShadow', 'outline', 'filter', 'opacity', 'visibility', 'color', 'maskImage', 'appearance'];
@@ -586,7 +609,9 @@
       if (v == null || v === '' || DEFAULTS[p] === v) return null;
       if (p === 'borderTopColor' && cs.borderTopStyle === 'none') return null;
       if (p === 'outline' && /none|0px/.test(v)) return null;
-      return p + '=' + (v.length > 160 ? v.slice(0, 160) + '…' : v);
+      // Shadows and filters are what fidelity questions usually hinge on: never cut them short.
+      var keep = p === 'boxShadow' || p === 'filter';
+      return p + '=' + (!keep && v.length > 160 ? v.slice(0, 160) + '…' : v);
     }).filter(Boolean).join('; ');
   }
 

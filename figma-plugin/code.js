@@ -382,6 +382,13 @@ var ALIGN = { 'flex-start': 'MIN', start: 'MIN', 'self-start': 'MIN', normal: 'M
 
 function size(n, w, h) { n.resize(Math.max(w, 0.01), Math.max(h, 0.01)); }
 
+// CSS lists shadows top-first; Figma's effects list draws later entries on top, like fills.
+function toEffects(list) {
+  return (list || []).slice().reverse().map(function (e) {
+    return { type: e.inset ? 'INNER_SHADOW' : 'DROP_SHADOW', color: e.color, offset: { x: e.x, y: e.y }, radius: e.blur, spread: e.spread, visible: true, blendMode: 'NORMAL' };
+  });
+}
+
 function applyBox(frame, node, binder) {
   frame.name = node.name;
   var fills = node.fills || (node.fill ? [node.fill] : []);
@@ -401,9 +408,7 @@ function applyBox(frame, node, binder) {
   frame.topRightRadius = r[1] || 0;
   frame.bottomRightRadius = r[2] || 0;
   frame.bottomLeftRadius = r[3] || 0;
-  frame.effects = (node.effects || []).map(function (e) {
-    return { type: e.inset ? 'INNER_SHADOW' : 'DROP_SHADOW', color: e.color, offset: { x: e.x, y: e.y }, radius: e.blur, spread: e.spread, visible: true, blendMode: 'NORMAL' };
-  });
+  frame.effects = toEffects(node.effects);
   if (node.opacity != null && node.opacity < 1) frame.opacity = node.opacity;
   frame.clipsContent = !!node.clip;
 }
@@ -478,6 +483,8 @@ function buildSvg(node, ctx) {
     var f = tag(figma.createNodeFromSvg(node.svg), 'svg');
     f.name = node.name === 'svg' ? 'Icon' : node.name;
     size(f, node.w, node.h);
+    // An empty-fill frame casts its shadow from its vectors, which is what filter: drop-shadow does.
+    if (node.effects && node.effects.length) f.effects = toEffects(node.effects);
     return f;
   } catch (e) {
     ctx.svgFailures++;
