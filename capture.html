@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polaris Capture</title>
+  <script src="open-shadow.js"></script>
+  <!-- Polaris 2.0 RC by default; add ?polaris=1 to the URL to compare with Polaris 1 -->
+  <script>
+    (function () {
+      var file = new URLSearchParams(location.search).get('polaris') === '1' ? 'polaris-1.js' : 'polaris-2.0-rc.js';
+      document.write('<script src="https://cdn.shopify.com/shopifycloud/' + file + '"><\/script>');
+    })();
+  </script>
+  <style>
+    body { margin: 0; padding: 40px; background: #fff; font: 13px/1.4 system-ui, sans-serif; color: #303030; }
+    .cap-intro { max-width: 720px; margin-bottom: 40px; }
+    .cap-intro h1 { font-size: 20px; margin: 0 0 8px; }
+    .cap-intro p { margin: 0 0 8px; color: #616161; }
+    .cap-set { margin-bottom: 56px; }
+    .cap-set > h2 { font-size: 16px; margin: 0 0 4px; }
+    .cap-set > p { margin: 0 0 16px; color: #616161; font-size: 12px; }
+    .cap-grid { display: flex; flex-wrap: wrap; gap: 32px 24px; align-items: flex-start; }
+    .cap-cell { margin: 0; }
+    .cap-cell figcaption { font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #8a8a8a; margin-bottom: 6px; white-space: nowrap; }
+    /* The frame is what you capture: no padding, border or fill, so it hugs the component. */
+    .cap-frame { display: inline-block; }
+    .cap-frame.fixed { display: block; }
+    #cap-export { font: 600 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 8px; border: 0; background: #303030; color: #fff; cursor: pointer; }
+    #cap-export:disabled, .cap-secondary:disabled { opacity: .4; cursor: default; }
+    .cap-secondary { font: 600 13px system-ui, sans-serif; padding: 8px 14px; border-radius: 8px; border: 1px solid #c9c9c9; background: #fff; color: #303030; cursor: pointer; margin-left: 4px; }
+    #cap-export-status { margin-left: 8px; color: #616161; }
+  </style>
+</head>
+<body>
+  <div class="cap-intro">
+    <h1>Polaris capture sheet</h1>
+    <p>One frame per variant. Each caption is already in Figma's variant format (<code>Property=Value, Property=Value</code>): name the captured frame with it, make it a component, then select all frames in a set and choose <b>Combine as variants</b>. Figma reads the properties from the names.</p>
+    <p>Overlays (modal, popover, menu, tooltip) only render when open, so capture those from the components page.</p>
+    <p><b>To build native Figma components:</b> export this sheet and load the file in the Polaris Foundations plugin. Import the foundations first so the components can use your variables and text styles.</p>
+    <p>
+      <button id="cap-export" disabled>Export components JSON</button>
+      <button id="cap-debug" class="cap-secondary" disabled>Copy debug info</button>
+      <span id="cap-export-status">Waiting for Polaris…</span>
+    </p>
+    <textarea id="cap-debug-text" readonly style="display:none;width:100%;height:200px;font:11px/1.4 ui-monospace,Menlo,monospace"></textarea>
+    <p><a href="index.html">← Components page</a></p>
+  </div>
+  <div id="cap"></div>
+  <script src="capture.js"></script>
+  <script src="components-export.js"></script>
+</body>
+</html>

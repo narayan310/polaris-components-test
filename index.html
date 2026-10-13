@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polaris Components</title>
+  <script src="open-shadow.js"></script>
+  <!-- Polaris 2.0 RC by default; add ?polaris=1 to the URL to compare with Polaris 1 -->
+  <script>
+    (function () {
+      var file = new URLSearchParams(location.search).get('polaris') === '1' ? 'polaris-1.js' : 'polaris-2.0-rc.js';
+      document.write('<script src="https://cdn.shopify.com/shopifycloud/' + file + '"><\/script>');
+    })();
+  </script>
+  <style>
+    body { margin: 0; background: #f1f1f1; }
+
+    /* Foundations: plain light-DOM markup so Figma importers capture it cleanly */
+    .fd-note { font: 13px/1.4 system-ui, sans-serif; color: #616161; margin: 0 0 12px; }
+    .fd-row { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 16px; align-items: center; padding: 12px 0; border-bottom: 1px solid #e3e3e3; }
+    .fd-row:last-child { border-bottom: 0; }
+    .fd-spec { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #303030; }
+    .fd-spec b { font-weight: 600; }
+    .fd-group { font: 600 13px/1.4 system-ui, sans-serif; color: #303030; margin: 20px 0 8px; }
+    .fd-group:first-child { margin-top: 0; }
+    .fd-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .fd-swatch { border: 1px solid #e3e3e3; border-radius: 8px; overflow: hidden; background: #fff; }
+    .fd-chip { height: 56px; }
+    .fd-meta { padding: 8px; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #303030; word-break: break-word; }
+    .fd-meta .fd-name { font: 600 12px/1.3 system-ui, sans-serif; margin-bottom: 2px; }
+    .fd-table { width: 100%; border-collapse: collapse; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .fd-table td { padding: 6px 8px; border-bottom: 1px solid #e3e3e3; vertical-align: middle; }
+    #fd-probes { position: absolute; left: -10000px; top: 0; width: 640px; }
+    @media (max-width: 640px) { .fd-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<s-page heading="Polaris components" inlineSize="large">
+  <s-button slot="primary-action" variant="primary" href="patterns.html">View patterns</s-button>
+
+  <!-- ============ FOUNDATIONS ============ -->
+  <!-- Values are measured from the rendered components at runtime (foundations.js), so they
+       always reflect whichever Polaris version is loaded. -->
+  <s-section heading="Export to Figma">
+    <p class="fd-note">Exports the measured fonts, type hierarchy and colors below as JSON for the Polaris Foundations Figma plugin (see <code>figma-plugin/</code>). Load the page with <code>?polaris=1</code> to export Polaris 1 into a second mode.</p>
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-button id="fd-copy" variant="primary" disabled>Copy foundations JSON</s-button>
+      <s-button id="fd-download" disabled>Download JSON</s-button>
+      <s-button href="capture.html" variant="tertiary">Open capture page</s-button>
+    </s-stack>
+    <p class="fd-note" id="fd-export-status" style="margin-top:8px">Measuring…</p>
+  </s-section>
+
+  <s-section heading="Typography — fonts">
+    <p class="fd-note">Font faces registered on the page by Polaris, read from <code>document.fonts</code>.</p>
+    <div id="fd-fonts"><p class="fd-note">Measuring…</p></div>
+  </s-section>
+
+  <s-section heading="Typography — hierarchy">
+    <p class="fd-note">Each row is the real component. Specs on the right are measured from its rendered text.</p>
+    <div class="fd-row"><s-text data-type-probe="page-title" data-type-ref="page" data-type-mode="heading" color="subdued">Page title (top of page)</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text data-type-probe="section-heading" data-type-ref="section" data-type-mode="heading" color="subdued">Section heading (“Typography — hierarchy” above)</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-section heading="Sub-section heading" data-type-probe="subsection-heading" data-type-mode="heading"></s-section><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-heading data-type-probe="heading">Heading (inside a section)</s-heading><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-paragraph data-type-probe="paragraph">Paragraph — body copy</s-paragraph><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-paragraph color="subdued" data-type-probe="paragraph-subdued">Paragraph — subdued</s-paragraph><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text data-type-probe="text">Text — default</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text type="strong" data-type-probe="text-strong">Text — strong</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text color="subdued" data-type-probe="text-subdued">Text — subdued</s-text><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-link href="#" data-type-probe="link">Link</s-link><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-button variant="primary" data-type-probe="button" data-type-mode="button">Button label</s-button><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-badge data-type-probe="badge">Badge label</s-badge><div class="fd-spec"></div></div>
+    <div class="fd-row"><s-text-field label="Field label" name="fd-field" data-type-probe="field-label" data-type-mode="label"></s-text-field><div class="fd-spec"></div></div>
+    <div class="fd-group">Type tokens (CSS variables exposed by Polaris)</div>
+    <div id="fd-type-tokens"><p class="fd-note">Measuring…</p></div>
+  </s-section>
+
+  <s-section heading="Colors — as rendered">
+    <p class="fd-note">Sampled from real components. Contrast is against the card surface; WCAG AA needs 4.5:1 for body text.</p>
+    <div id="fd-colors"><p class="fd-note">Measuring…</p></div>
+  </s-section>
+
+  <s-section heading="Colors — tokens">
+    <p class="fd-note">Every color CSS variable Polaris defines, grouped by name.</p>
+    <div id="fd-color-tokens"><p class="fd-note">Measuring…</p></div>
+  </s-section>
+
+  <!-- ============ ACTIONS ============ -->
+  <s-section heading="Button — variants">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-button variant="primary">Primary</s-button>
+      <s-button variant="secondary">Secondary</s-button>
+      <s-button variant="tertiary">Tertiary</s-button>
+      <s-button variant="auto">Auto</s-button>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Button — tones">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-button variant="primary" tone="critical">Delete</s-button>
+      <s-button variant="secondary" tone="critical">Delete</s-button>
+      <s-button variant="tertiary" tone="critical">Delete</s-button>
+      <s-button variant="primary" tone="neutral">Neutral</s-button>
+      <s-button variant="secondary" tone="neutral">Neutral</s-button>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Button — states & icons">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-button variant="primary" icon="save">Save</s-button>
+      <s-button variant="secondary" icon="plus">Add product</s-button>
+      <s-button variant="primary" disabled>Disabled</s-button>
+      <s-button variant="secondary" disabled>Disabled</s-button>
+      <s-button variant="primary" loading>Loading</s-button>
+      <s-button variant="secondary" loading>Loading</s-button>
+      <s-button icon="edit" accessibilityLabel="Edit"></s-button>
+      <s-button icon="delete" tone="critical" accessibilityLabel="Delete"></s-button>
+      <s-button icon="menu-vertical" variant="tertiary" accessibilityLabel="More"></s-button>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Button group">
+    <s-button-group gap="base">
+      <s-button slot="primary-action" variant="primary">Save</s-button>
+      <s-button slot="secondary-actions">Cancel</s-button>
+    </s-button-group>
+  </s-section>
+
+  <s-section heading="Link">
+    <s-stack direction="inline" gap="large">
+      <s-link href="#">Default link</s-link>
+      <s-link href="#" tone="critical">Critical link</s-link>
+      <s-link href="#" tone="neutral">Neutral link</s-link>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Clickable">
+    <s-clickable href="#" padding="base" background="subdued" borderRadius="base">
+      <s-text>Clickable area — wraps arbitrary content in a link/button</s-text>
+    </s-clickable>
+  </s-section>
+
+  <s-section heading="Menu (click to open)">
+    <s-button commandFor="actions-menu" icon="menu-vertical">Actions</s-button>
+    <s-menu id="actions-menu" accessibilityLabel="Actions">
+      <s-button icon="edit">Edit</s-button>
+      <s-button icon="duplicate">Duplicate</s-button>
+      <s-button icon="delete" tone="critical">Delete</s-button>
+    </s-menu>
+  </s-section>
+
+  <!-- ============ FEEDBACK ============ -->
+  <s-section heading="Badge — tones">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-badge>Default</s-badge>
+      <s-badge tone="info">Info</s-badge>
+      <s-badge tone="success">Success</s-badge>
+      <s-badge tone="caution">Caution</s-badge>
+      <s-badge tone="warning">Warning</s-badge>
+      <s-badge tone="critical">Critical</s-badge>
+      <s-badge tone="neutral">Neutral</s-badge>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Badge — strong color, icons, large">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-badge color="strong" tone="info">Info</s-badge>
+      <s-badge color="strong" tone="success">Success</s-badge>
+      <s-badge color="strong" tone="warning">Warning</s-badge>
+      <s-badge color="strong" tone="critical">Critical</s-badge>
+      <s-badge tone="success" icon="check-circle">Fulfilled</s-badge>
+      <s-badge tone="warning" icon="alert-circle">Unfulfilled</s-badge>
+      <s-badge size="large" tone="info">Large</s-badge>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Banner">
+    <s-stack gap="base">
+      <s-banner heading="Info banner" tone="info" dismissible>
+        Informational message with supporting detail.
+        <s-button slot="secondary-actions">Learn more</s-button>
+      </s-banner>
+      <s-banner heading="Success banner" tone="success" dismissible>Your changes were saved.</s-banner>
+      <s-banner heading="Warning banner" tone="warning">Some items need attention before you continue.</s-banner>
+      <s-banner heading="Critical banner" tone="critical">
+        3 orders failed to sync.
+        <s-button slot="secondary-actions">Retry</s-button>
+      </s-banner>
+      <s-banner tone="auto">Banner without a heading.</s-banner>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Spinner">
+    <s-stack direction="inline" gap="large" alignItems="center">
+      <s-spinner size="base" accessibilityLabel="Loading"></s-spinner>
+      <s-spinner size="large" accessibilityLabel="Loading"></s-spinner>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Tooltip (hover the icon)">
+    <s-stack direction="inline" gap="small-200" alignItems="center">
+      <s-text>Inventory</s-text>
+      <s-icon type="info" interestFor="inv-tip"></s-icon>
+      <s-tooltip id="inv-tip">Available stock across all locations</s-tooltip>
+    </s-stack>
+  </s-section>
+
+  <!-- ============ TYPOGRAPHY ============ -->
+  <s-section heading="Typography">
+    <s-stack gap="base">
+      <s-heading>Heading</s-heading>
+      <s-paragraph>Paragraph — body text used for longer descriptions and supporting copy across the admin.</s-paragraph>
+      <s-paragraph color="subdued">Paragraph — subdued color for secondary information.</s-paragraph>
+      <s-stack direction="inline" gap="large">
+        <s-text>Text default</s-text>
+        <s-text type="strong">Text strong</s-text>
+        <s-text color="subdued">Text subdued</s-text>
+        <s-text tone="success">Success</s-text>
+        <s-text tone="caution">Caution</s-text>
+        <s-text tone="warning">Warning</s-text>
+        <s-text tone="critical">Critical</s-text>
+        <s-text tone="info">Info</s-text>
+      </s-stack>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Lists">
+    <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+      <s-unordered-list>
+        <s-list-item>Unordered item</s-list-item>
+        <s-list-item>Unordered item</s-list-item>
+        <s-list-item>Unordered item</s-list-item>
+      </s-unordered-list>
+      <s-ordered-list>
+        <s-list-item>Ordered item</s-list-item>
+        <s-list-item>Ordered item</s-list-item>
+        <s-list-item>Ordered item</s-list-item>
+      </s-ordered-list>
+    </s-grid>
+  </s-section>
+
+  <!-- ============ MEDIA ============ -->
+  <s-section heading="Avatar">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-avatar initials="JD" size="small" alt="Jane Doe"></s-avatar>
+      <s-avatar initials="JD" size="base" alt="Jane Doe"></s-avatar>
+      <s-avatar initials="JD" size="large" alt="Jane Doe"></s-avatar>
+      <s-avatar alt="Customer"></s-avatar>
+      <s-avatar src="https://picsum.photos/id/64/120/120" size="large" alt="Photo avatar"></s-avatar>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Thumbnail">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-thumbnail src="https://picsum.photos/id/21/200/200" alt="Product" size="small"></s-thumbnail>
+      <s-thumbnail src="https://picsum.photos/id/21/200/200" alt="Product" size="base"></s-thumbnail>
+      <s-thumbnail src="https://picsum.photos/id/21/200/200" alt="Product" size="large"></s-thumbnail>
+      <s-thumbnail alt="No image" size="base"></s-thumbnail>
+    </s-stack>
+  </s-section>
+
+  <s-section heading="Image">
+    <s-box inlineSize="480px">
+      <s-image src="https://picsum.photos/id/30/960/540" alt="Sample" aspectRatio="16/9" objectFit="cover" borderRadius="base"></s-image>
+    </s-box>
+  </s-section>
+
+  <s-section heading="Icon">
+    <s-stack direction="inline" gap="large" alignItems="center">
+      <s-icon type="home"></s-icon>
+      <s-icon type="order"></s-icon>
+      <s-icon type="product"></s-icon>
+      <s-icon type="cart"></s-icon>
+      <s-icon type="person"></s-icon>
+      <s-icon type="settings"></s-icon>
+      <s-icon type="search"></s-icon>
+      <s-icon type="edit"></s-icon>
+      <s-icon type="delete"></s-icon>
+      <s-icon type="plus"></s-icon>
+      <s-icon type="info"></s-icon>
+      <s-icon type="alert-circle"></s-icon>
+      <s-icon type="check-circle"></s-icon>
+      <s-icon type="calendar"></s-icon>
+      <s-icon type="email"></s-icon>
+      <s-icon type="x"></s-icon>
+      <s-icon type="check-circle" tone="success"></s-icon>
+      <s-icon type="alert-circle" tone="critical"></s-icon>
+      <s-icon type="alert-circle" tone="warning"></s-icon>
+    </s-stack>
+  </s-section>
+
+  <!-- ============ CHIPS ============ -->
+  <s-section heading="Chip & clickable chip">
+    <s-stack direction="inline" gap="base" alignItems="center">
+      <s-chip>Base chip</s-chip>
+      <s-chip color="subdued">Subdued chip</s-chip>
+      <s-chip color="strong">Strong chip</s-chip>
+      <s-clickable-chip>Clickable</s-clickable-chip>
+      <s-clickable-chip removable accessibilityLabel="Remove filter">Status: Active</s-clickable-chip>
+      <s-clickable-chip color="strong" removable accessibilityLabel="Remove filter">Vendor: Acme</s-clickable-chip>
+    </s-stack>
+  </s-section>
+
+  <!-- ============ FORMS ============ -->
+  <s-section heading="Text field — states">
+    <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+      <s-text-field label="Default" name="t1" placeholder="Placeholder"></s-text-field>
+      <s-text-field label="With value" name="t2" value="Snowboard"></s-text-field>
+      <s-text-field label="With help text" name="t3" details="Shown to customers at checkout"></s-text-field>
+      <s-text-field label="With icon" name="t4" icon="search" placeholder="Search"></s-text-field>
+      <s-text-field label="Error" name="t5" value="ab" error="Title must be at least 3 characters"></s-text-field>
+      <s-text-field label="Disabled" name="t6" value="Read only" disabled></s-text-field>
+      <s-text-field label="Required" name="t7" required></s-text-field>
+      <s-text-field label="Prefix & suffix" name="t8" prefix="https://" suffix=".com"></s-text-field>
+    </s-grid>
+  </s-section>
+
+  <s-section heading="Specialised fields">
+    <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+      <s-email-field label="Email" name="email" placeholder="you@example.com"></s-email-field>
+      <s-password-field label="Password" name="password" value="hunter2hunter2"></s-password-field>
+      <s-url-field label="Website" name="url" placeholder="https://"></s-url-field>
+      <s-search-field label="Search" name="q" placeholder="Search products"></s-search-field>
+      <s-number-field label="Quantity" name="qty" value="1" min="1" max="100" step="1"></s-number-field>
+      <s-money-field label="Price" name="price" value="24.99"></s-money-field>
+      <s-date-field label="Start date" name="start" value="2025-06-15"></s-date-field>
+      <s-color-field label="Brand color" name="brand" value="#008060"></s-color-field>
+    </s-grid>
+  </s-section>
+
+  <s-section heading="Text area">
+    <s-text-area label="Description" name="desc" rows="4" maxLength="500" details="Max 500 characters"></s-text-area>
+  </s-section>
+
+  <s-section heading="Select">
+    <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+      <s-select label="Status" name="status">
+        <s-option value="active">Active</s-option>
+        <s-option value="draft">Draft</s-option>
+        <s-option value="archived">Archived</s-option>
+      </s-select>
+      <s-select label="Disabled" name="status2" disabled>
+        <s-option value="active">Active</s-option>
+      </s-select>
+    </s-grid>
+  </s-section>
+
+  <s-section heading="Checkbox, switch, choice list">
+    <s-grid gridTemplateColumns="1fr 1fr 1fr" gap="base">
+      <s-stack gap="small">
+        <s-checkbox label="Unchecked" name="c1"></s-checkbox>
+        <s-checkbox label="Checked" name="c2" checked></s-checkbox>
+        <s-checkbox label="Indeterminate" name="c3" indeterminate></s-checkbox>
+        <s-checkbox label="Disabled" name="c4" disabled></s-checkbox>
+        <s-checkbox label="With help text" name="c5" details="Customers will be notified"></s-checkbox>
+        <s-checkbox label="Error" name="c6" error="You must accept the terms"></s-checkbox>
+      </s-stack>
+      <s-stack gap="small">
+        <s-switch label="Off" name="s1"></s-switch>
+        <s-switch label="On" name="s2" checked></s-switch>
+        <s-switch label="Disabled" name="s3" disabled></s-switch>
+      </s-stack>
+      <s-stack gap="base">
+        <s-choice-list label="Single choice" name="single">
+          <s-choice value="1" selected>Option 1</s-choice>
+          <s-choice value="2">Option 2</s-choice>
+          <s-choice value="3">Option 3</s-choice>
+        </s-choice-list>
+        <s-choice-list label="Multiple choice" name="multi" multiple>
+          <s-choice value="a" selected>Option A</s-choice>
+          <s-choice value="b">Option B</s-choice>
+        </s-choice-list>
+      </s-stack>
+    </s-grid>
+  </s-section>
+
+  <s-section heading="Date picker & color picker">
+    <s-grid gridTemplateColumns="auto auto" gap="large" justifyContent="start">
+      <s-date-picker type="single" name="d" value="2025-03-01"></s-date-picker>
+      <s-color-picker name="bg" value="#3498DB"></s-color-picker>
+    </s-grid>
+  </s-section>
+
+  <s-section heading="Drop zone">
+    <s-drop-zone label="Upload images" name="file" accept=".jpg,.png" multiple></s-drop-zone>
+  </s-section>
+
+  <!-- ============ LAYOUT ============ -->
+  <s-section heading="Box, divider, stack, grid">
+    <s-stack gap="base">
+      <s-grid gridTemplateColumns="1fr 1fr 1fr" gap="base">
+        <s-box padding="base" background="base" border="base" borderRadius="base">Box — base</s-box>
+        <s-box padding="base" background="subdued" border="base" borderRadius="base">Box — subdued</s-box>
+        <s-box padding="base" background="strong" borderRadius="base">Box — strong</s-box>
+      </s-grid>
+      <s-divider></s-divider>
+      <s-grid gridTemplateColumns="1fr auto" gap="base" alignItems="end">
+        <s-text-field label="Discount code" name="code"></s-text-field>
+        <s-button variant="primary">Apply</s-button>
+      </s-grid>
+    </s-stack>
+  </s-section>
+
+  <!-- ============ DATA ============ -->
+  <s-section heading="Table" padding="none">
+    <s-table>
+      <s-table-header-row>
+        <s-table-header listSlot="primary">Product</s-table-header>
+        <s-table-header listSlot="inline">Status</s-table-header>
+        <s-table-header listSlot="labeled" format="numeric">Inventory</s-table-header>
+        <s-table-header listSlot="labeled" format="currency">Price</s-table-header>
+      </s-table-header-row>
+      <s-table-body>
+        <s-table-row>
+          <s-table-cell>Snowboard — Liquid</s-table-cell>
+          <s-table-cell><s-badge tone="success">Active</s-badge></s-table-cell>
+          <s-table-cell>42</s-table-cell>
+          <s-table-cell>$749.95</s-table-cell>
+        </s-table-row>
+        <s-table-row>
+          <s-table-cell>Snowboard — Oxygen</s-table-cell>
+          <s-table-cell><s-badge>Draft</s-badge></s-table-cell>
+          <s-table-cell>0</s-table-cell>
+          <s-table-cell>$1,025.00</s-table-cell>
+        </s-table-row>
+        <s-table-row>
+          <s-table-cell>Gift card</s-table-cell>
+          <s-table-cell><s-badge tone="neutral">Archived</s-badge></s-table-cell>
+          <s-table-cell>—</s-table-cell>
+          <s-table-cell>$50.00</s-table-cell>
+        </s-table-row>
+      </s-table-body>
+    </s-table>
+  </s-section>
+
+  <!-- ============ OVERLAYS ============ -->
+  <s-section heading="Overlays (click to open — capture while open)">
+    <s-stack direction="inline" gap="base">
+      <s-button commandFor="demo-modal" command="--show">Open modal</s-button>
+      <s-button commandFor="demo-popover">Open popover</s-button>
+    </s-stack>
+    <s-modal id="demo-modal" heading="Delete product?">
+      <s-paragraph>This can't be undone. The product will be removed from all sales channels.</s-paragraph>
+      <s-button slot="primary-action" variant="primary" tone="critical" commandFor="demo-modal" command="--hide">Delete</s-button>
+      <s-button slot="secondary-actions" commandFor="demo-modal" command="--hide">Cancel</s-button>
+    </s-modal>
+    <s-popover id="demo-popover">
+      <s-box padding="base">
+        <s-stack gap="small">
+          <s-text type="strong">Popover</s-text>
+          <s-text color="subdued">Anchored, dismissible content.</s-text>
+        </s-stack>
+      </s-box>
+    </s-popover>
+  </s-section>
+</s-page>
+<div id="fd-probes" aria-hidden="true"></div>
+<script src="foundations.js"></script>
+</body>
+</html>
